@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, AttachmentBuilder } = require('discord.js');
 
 const ALLOWED_GUILDS = ["1412700210852794400"];
 
@@ -40,24 +40,11 @@ module.exports = {
                     { name: '🚨 Alert', value: 'alert' }
                 )
         )
-        .addStringOption(option =>
+        .addAttachmentOption(option =>
             option
                 .setName('image')
-                .setDescription('Image URL (optional)')
+                .setDescription('Image file to attach (optional)')
                 .setRequired(false)
-        )
-        .addStringOption(option =>
-            option
-                .setName('thumbnail')
-                .setDescription('Thumbnail URL (optional)')
-                .setRequired(false)
-        )
-        .addStringOption(option =>
-            option
-                .setName('footer')
-                .setDescription('Footer text (optional)')
-                .setRequired(false)
-                .setMaxLength(2048)
         )
         .addRoleOption(option =>
             option
@@ -94,9 +81,7 @@ module.exports = {
         const message = interaction.options.getString('message');
         const targetChannel = interaction.options.getChannel('channel');
         const type = interaction.options.getString('type') || 'general';
-        const imageUrl = interaction.options.getString('image');
-        const thumbnailUrl = interaction.options.getString('thumbnail');
-        const footerText = interaction.options.getString('footer');
+        const imageFile = interaction.options.getAttachment('image');
         const pingRole = interaction.options.getRole('ping');
 
         if (!targetChannel.send) {
@@ -125,23 +110,30 @@ module.exports = {
         const style = styles[type];
 
         try {
+            // Validate image file if provided
+            if (imageFile && !imageFile.contentType?.startsWith('image/')) {
+                return await interaction.editReply({
+                    content: "**Invalid file type!**\n> Please upload an image file (PNG, JPG, GIF, etc.)"
+                });
+            }
+
             // Create modern embed
             const embed = new EmbedBuilder()
                 .setColor(style.color)
                 .setTitle(`${style.emoji} ${title}`)
                 .setDescription(message)
-                .setTimestamp()
-                .setFooter({ 
-                    text: footerText || `${style.label} • Posted by ${interaction.user.tag}`,
-                    iconURL: interaction.user.displayAvatarURL()
-                });
+                .setTimestamp();
 
-            if (imageUrl) {
-                embed.setImage(imageUrl);
-            }
+            // Files array for attachments
+            const files = [];
 
-            if (thumbnailUrl) {
-                embed.setThumbnail(thumbnailUrl);
+            // Handle image attachment
+            if (imageFile) {
+                const response = await fetch(imageFile.url);
+                const buffer = Buffer.from(await response.arrayBuffer());
+                const attachment = { attachment: buffer, name: imageFile.name };
+                files.push(attachment);
+                embed.setImage(`attachment://${imageFile.name}`);
             }
 
             // Create button row (optional interactive elements)
@@ -164,6 +156,7 @@ module.exports = {
             await targetChannel.send({
                 content: content,
                 embeds: [embed],
+                files: files.length > 0 ? files : undefined,
                 components: [row]
             });
 
