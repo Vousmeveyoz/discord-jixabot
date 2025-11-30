@@ -1,44 +1,23 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, AttachmentBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 
 const ALLOWED_GUILDS = ["1412700210852794400"];
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('announce')
-        .setDescription('Send a modern announcement to a channel')
-        .addStringOption(option =>
-            option
-                .setName('title')
-                .setDescription('Announcement title')
-                .setRequired(true)
-                .setMaxLength(256)
-        )
+        .setDescription('Send an announcement to a channel')
         .addStringOption(option =>
             option
                 .setName('message')
                 .setDescription('Announcement message')
                 .setRequired(true)
-                .setMaxLength(4000)
+                .setMaxLength(2000)
         )
         .addChannelOption(option =>
             option
                 .setName('channel')
                 .setDescription('Channel to send announcement')
                 .setRequired(true)
-        )
-        .addStringOption(option =>
-            option
-                .setName('type')
-                .setDescription('Announcement type/style')
-                .setRequired(false)
-                .addChoices(
-                    { name: '📢 General', value: 'general' },
-                    { name: '🎉 Event', value: 'event' },
-                    { name: '⚠️ Important', value: 'important' },
-                    { name: '🔔 Update', value: 'update' },
-                    { name: '🎁 Giveaway', value: 'giveaway' },
-                    { name: '🚨 Alert', value: 'alert' }
-                )
         )
         .addAttachmentOption(option =>
             option
@@ -77,10 +56,8 @@ module.exports = {
             });
         }
 
-        const title = interaction.options.getString('title');
         const message = interaction.options.getString('message');
         const targetChannel = interaction.options.getChannel('channel');
-        const type = interaction.options.getString('type') || 'general';
         const imageFile = interaction.options.getAttachment('image');
         const pingRole = interaction.options.getRole('ping');
 
@@ -97,18 +74,6 @@ module.exports = {
             });
         }
 
-        // Style configuration based on type
-        const styles = {
-            general: { color: 0x5865F2, emoji: '📢', label: 'General Announcement' },
-            event: { color: 0xFEE75C, emoji: '🎉', label: 'Event Announcement' },
-            important: { color: 0xED4245, emoji: '⚠️', label: 'Important Notice' },
-            update: { color: 0x57F287, emoji: '🔔', label: 'Update Notice' },
-            giveaway: { color: 0xEB459E, emoji: '🎁', label: 'Giveaway' },
-            alert: { color: 0xFF6B6B, emoji: '🚨', label: 'Alert' }
-        };
-
-        const style = styles[type];
-
         try {
             // Validate image file if provided
             if (imageFile && !imageFile.contentType?.startsWith('image/')) {
@@ -117,13 +82,6 @@ module.exports = {
                 });
             }
 
-            // Create modern embed
-            const embed = new EmbedBuilder()
-                .setColor(style.color)
-                .setTitle(`${style.emoji} ${title}`)
-                .setDescription(message)
-                .setTimestamp();
-
             // Files array for attachments
             const files = [];
 
@@ -131,65 +89,45 @@ module.exports = {
             if (imageFile) {
                 const response = await fetch(imageFile.url);
                 const buffer = Buffer.from(await response.arrayBuffer());
-                const attachment = { attachment: buffer, name: imageFile.name };
-                files.push(attachment);
-                embed.setImage(`attachment://${imageFile.name}`);
+                files.push({ attachment: buffer, name: imageFile.name });
             }
 
-            // Create button row (optional interactive elements)
-            const row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('announce_react')
-                        .setLabel('✓ Acknowledged')
-                        .setStyle(ButtonStyle.Success)
-                        .setDisabled(true),
-                    new ButtonBuilder()
-                        .setLabel('View Server')
-                        .setStyle(ButtonStyle.Link)
-                        .setURL(`https://discord.com/channels/${interaction.guild.id}`)
-                );
+            // Build message content
+            let content = '';
+            if (pingRole) {
+                content += `${pingRole}\n\n`;
+            }
+            content += message;
 
             // Send announcement
-            const content = pingRole ? `${pingRole}` : null;
-            
             await targetChannel.send({
                 content: content,
-                embeds: [embed],
-                files: files.length > 0 ? files : undefined,
-                components: [row]
+                files: files.length > 0 ? files : undefined
             });
 
             // Success response
-            const successEmbed = new EmbedBuilder()
-                .setColor(0x57F287)
-                .setTitle('✅ Announcement Sent Successfully!')
-                .setDescription(`Your announcement has been posted to ${targetChannel}`)
-                .addFields(
-                    { name: 'Title', value: title, inline: false },
-                    { name: 'Type', value: style.label, inline: true },
-                    { name: 'Channel', value: `${targetChannel}`, inline: true }
-                )
-                .setTimestamp();
-
-            await interaction.editReply({ embeds: [successEmbed] });
+            await interaction.editReply({ 
+                content: `**Announcement sent successfully!**\n> Sent to: ${targetChannel}` 
+            });
 
             console.log(`[ANNOUNCE] ${interaction.user.tag} posted announcement to #${targetChannel.name}`);
 
         } catch (error) {
             console.error('[ERROR] Announce command failed:', error);
 
-            const errorMsg = `**Failed to send announcement.**\n\n${
-                error.code === 50013 
-                    ? '> I don\'t have permission to send messages in that channel.' 
-                    : '> An unexpected error occurred. Please try again.'
-            }`;
+            let errorMsg = '**Failed to send announcement.**\n\n';
+            
+            if (error.code === 50013) {
+                errorMsg += '> I don\'t have permission to send messages in that channel.';
+            } else {
+                errorMsg += `> Error: ${error.message || 'An unexpected error occurred.'}`;
+            }
 
-        try {
-            await interaction.editReply({ content: errorMsg });
-        } catch (replyError) {
-            console.error('[ERROR] Failed to send error message:', replyError);
-        }
+            try {
+                await interaction.editReply({ content: errorMsg });
+            } catch (replyError) {
+                console.error('[ERROR] Failed to send error message:', replyError);
+            }
         }
     }
 };
