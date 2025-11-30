@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 
 const ALLOWED_GUILDS = ["1412700210852794400"];
 
@@ -181,7 +181,7 @@ module.exports = {
 
             await interaction.editReply({ embeds: [successEmbed] });
 
-            console.log(`[ANNOUNCE] ${interaction.user.tag} posted "${title}" to #${targetChannel.name}`);
+            console.log(`[ANNOUNCE] ${interaction.user.tag} posted announcement to #${targetChannel.name}`);
 
         } catch (error) {
             console.error('[ERROR] Announce command failed:', error);
@@ -192,7 +192,11 @@ module.exports = {
                     : '> An unexpected error occurred. Please try again.'
             }`;
 
-            await interaction.editReply({ content: errorMsg }).catch(console.error);
+        try {
+            await interaction.editReply({ content: errorMsg });
+        } catch (replyError) {
+            console.error('[ERROR] Failed to send error message:', replyError);
+        }
         }
     }
 };
