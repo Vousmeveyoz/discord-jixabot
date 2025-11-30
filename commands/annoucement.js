@@ -163,7 +163,7 @@ module.exports = {
             // Success response
             const successEmbed = new EmbedBuilder()
                 .setColor(0x57F287)
-                .setTitle('Announcement Sent Successfully!')
+                .setTitle('✅ Announcement Sent Successfully!')
                 .setDescription(`Your announcement has been posted to ${targetChannel}`)
                 .addFields(
                     { name: 'Title', value: title, inline: false },
