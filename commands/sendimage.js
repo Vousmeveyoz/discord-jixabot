@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, AttachmentBuilder, ChannelType, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, AttachmentBuilder, MessageFlags } = require('discord.js');
 
 const ALLOWED_GUILDS = ["1412700210852794400"];
 
@@ -17,7 +17,6 @@ module.exports = {
                 .setName('channel')
                 .setDescription('Channel to send the image to')
                 .setRequired(true)
-                .addChannelTypes(ChannelType.GuildText)
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
         .setDMPermission(false),
@@ -53,8 +52,15 @@ module.exports = {
             });
         }
 
+        // Check if channel supports sending messages
+        if (!targetChannel.send) {
+            return await interaction.editReply({
+                content: `**Cannot send messages to ${targetChannel}!**\n> This channel type doesn't support sending messages.`
+            });
+        }
+
         const botPermissions = targetChannel.permissionsFor(interaction.guild.members.me);
-        if (!botPermissions.has([PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles])) {
+        if (!botPermissions || !botPermissions.has([PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles])) {
             return await interaction.editReply({
                 content: `**I don't have permission in ${targetChannel}!**\n> Required: Send Messages & Attach Files`
             });
