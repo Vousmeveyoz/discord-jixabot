@@ -167,19 +167,20 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled
 
     // Add BagiBagi info if enabled
     if (bagiBagiEnabled && channelInfo) {
+        const rateLabel = channelInfo.koinRate === 100 ? '(Production Default)' : '(Test Mode)';
         embed.addFields({
             name: "🎁 BagiBagi Listener",
             value: 
                 `\`✅\` Registered successfully\n` +
                 `**Channel:** <#${channelInfo.channelId}>\n` +
-                `**Rate:** 1 Koin = ${channelInfo.koinRate} IDR ${channelInfo.koinRate === 100 ? '*(Production Default)*' : '*(Test Mode)*'}\n` +
+                `**Rate:** 1 Koin = ${channelInfo.koinRate} IDR ${rateLabel}\n` +
                 `**Key:** \`${key}\``,
             inline: false
         });
     }
 
-    embed.setTimestamp()
-         .setFooter({ text: "License System • BLOKMARKET" });
+    embed.setTimestamp();
+    embed.setFooter({ text: "License System • BLOKMARKET" });
 
     return embed;
 }
@@ -234,8 +235,8 @@ function createDMEmbed(robloxId, key, fileCount, bagiBagiEnabled) {
         });
     }
 
-    embed.setTimestamp()
-         .setFooter({ text: "License System • blokmarket!" });
+    embed.setTimestamp();
+    embed.setFooter({ text: "License System • blokmarket!" });
 
     return embed;
 }
@@ -433,7 +434,7 @@ module.exports = {
         } catch (err) {
             console.error("[ERROR] Failed to generate license:", err);
             
-            const errorMsg = "❌ Failed to generate license. Please try again.\n```" + err.message + "```";
+            const errorMsg = `❌ Failed to generate license. Please try again.\n\`\`\`${err.message}\`\`\``;
             
             if (interaction.deferred) {
                 await interaction.editReply({ content: errorMsg });
