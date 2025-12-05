@@ -1,10 +1,11 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, AttachmentBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, AttachmentBuilder, ChannelType } = require('discord.js');
 const fs = require('fs').promises;
 const path = require('path');
 
 // Constants
 const SCRIPT_ID = "DONATE_PLATFORM";
 const LICENSES_FILE = path.join(__dirname, "..", "licenses.json");
+const BAGIBAGI_CUSTOMERS_FILE = path.join(__dirname, "..", "bagibagi-customers.json");
 const ATTACHMENTS_DIR = path.join(__dirname, "..", "attachments");
 const KEY_LENGTH = 4;
 const KEY_SECTIONS = 4;
@@ -51,12 +52,58 @@ async function saveLicense(robloxId, discordId, key) {
     await fs.writeFile(LICENSES_FILE, JSON.stringify(data, null, 2));
 }
 
+// ════════════════════════════════════════════════════════════
+// 🎁 BAGIBAGI CUSTOMER FUNCTIONS
+// ════════════════════════════════════════════════════════════
+
+// Read bagibagi-customers.json
+async function readBagiBagiCustomers() {
+    try {
+        const data = await fs.readFile(BAGIBAGI_CUSTOMERS_FILE, "utf8");
+        return JSON.parse(data);
+    } catch (err) {
+        if (err.code === "ENOENT") {
+            return { customers: [] };
+        }
+        throw err;
+    }
+}
+
+// Save BagiBagi customer
+async function saveBagiBagiCustomer(customerName, userKey, channelId, koinRate) {
+    const data = await readBagiBagiCustomers();
+    
+    // Check if customer already exists
+    const existingIndex = data.customers.findIndex(c => c.userKey === userKey);
+    
+    if (existingIndex !== -1) {
+        // Update existing customer
+        data.customers[existingIndex] = {
+            name: customerName,
+            userKey: userKey,
+            channelId: channelId,
+            koinRate: koinRate,
+            updatedAt: new Date().toISOString()
+        };
+    } else {
+        // Add new customer
+        data.customers.push({
+            name: customerName,
+            userKey: userKey,
+            channelId: channelId,
+            koinRate: koinRate,
+            createdAt: new Date().toISOString()
+        });
+    }
+
+    await fs.writeFile(BAGIBAGI_CUSTOMERS_FILE, JSON.stringify(data, null, 2));
+}
+
 // Get list of available files in attachments folder
 async function getAvailableFiles() {
     try {
         const files = await fs.readdir(ATTACHMENTS_DIR);
         return files.filter(file => {
-            // Filter out hidden files and directories
             return !file.startsWith('.');
         });
     } catch (err) {
@@ -75,14 +122,11 @@ async function getSpecificAttachments(fileNames) {
         return attachments;
     }
 
-    // Split comma-separated file names
     const requestedFiles = fileNames.split(',').map(f => f.trim());
 
     for (const fileName of requestedFiles) {
         try {
             const filePath = path.join(ATTACHMENTS_DIR, fileName);
-            
-            // Check if file exists
             await fs.access(filePath);
             attachments.push(new AttachmentBuilder(filePath));
         } catch (err) {
@@ -94,8 +138,8 @@ async function getSpecificAttachments(fileNames) {
 }
 
 // Create embed for channel
-function createChannelEmbed(robloxId, discordId, key, fileCount) {
-    return new EmbedBuilder()
+function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled, channelInfo) {
+    const embed = new EmbedBuilder()
         .setColor("#00FF87")
         .setTitle("LICENSE ACTIVATED")
         .addFields(
@@ -114,23 +158,39 @@ function createChannelEmbed(robloxId, discordId, key, fileCount) {
             {
                 name: "Delivery Status",
                 value: 
-                    `\`\` License key sent via DM\n` +
-                    `\`\` ${fileCount} file(s) delivered\n` +
-                    `\`\` User notified successfully`,
+                    `\`✅\` License key sent via DM\n` +
+                    `\`✅\` ${fileCount} file(s) delivered\n` +
+                    `\`✅\` User notified successfully`,
                 inline: false
             }
-        )
-        .setTimestamp()
-        .setFooter({ text: "License System • BLOKMARKET" });
+        );
+
+    // Add BagiBagi info if enabled
+    if (bagiBagiEnabled && channelInfo) {
+        embed.addFields({
+            name: "🎁 BagiBagi Listener",
+            value: 
+                `\`✅\` Registered successfully\n` +
+                `**Channel:** <#${channelInfo.channelId}>\n` +
+                `**Rate:** 1 Koin = ${channelInfo.koinRate} IDR\n` +
+                `**Key:** \`${key}\``,
+            inline: false
+        });
+    }
+
+    embed.setTimestamp()
+         .setFooter({ text: "License System • BLOKMARKET" });
+
+    return embed;
 }
 
 // Create embed for DM
-function createDMEmbed(robloxId, key, fileCount) {
-    return new EmbedBuilder()
+function createDMEmbed(robloxId, key, fileCount, bagiBagiEnabled) {
+    const embed = new EmbedBuilder()
         .setColor("#00FF87")
         .setTitle("YOUR LICENSE BLOKMARKET")
         .setDescription(
-            `> lokmarket license has been activated.\n` +
+            `> Blokmarket license has been activated.\n` +
             `> ${fileCount} file(s) are attached to this message.`
         )
         .addFields(
@@ -147,7 +207,7 @@ function createDMEmbed(robloxId, key, fileCount) {
             { 
                 name: "Your License Key", 
                 value: `\`\`\`${key}\`\`\``,
-                inline: false 
+                inline: false
             },
             {
                 name: "How to Use",
@@ -160,9 +220,24 @@ function createDMEmbed(robloxId, key, fileCount) {
                     `**Keep this key private - do not share!**`,
                 inline: false
             }
-        )
-        .setTimestamp()
-        .setFooter({ text: "License System • blokmarket!" });
+        );
+
+    // Add BagiBagi notice if enabled
+    if (bagiBagiEnabled) {
+        embed.addFields({
+            name: "🎁 BagiBagi Integration",
+            value: 
+                `Your BagiBagi donations are now connected!\n` +
+                `Bot will automatically forward donations to your VPS.\n\n` +
+                `**Note:** Make sure BagiBagiAPP sends notifications to the registered channel.`,
+            inline: false
+        });
+    }
+
+    embed.setTimestamp()
+         .setFooter({ text: "License System • blokmarket!" });
+
+    return embed;
 }
 
 // Export command
@@ -186,6 +261,21 @@ module.exports = {
             option
                 .setName('files')
                 .setDescription('File names to attach (comma separated, e.g: script.lua,readme.txt)')
+                .setRequired(false)
+        )
+        .addChannelOption(option =>
+            option
+                .setName('bagibagi_channel')
+                .setDescription('🎁 [OPTIONAL] Channel for BagiBagi webhook notifications')
+                .addChannelTypes(ChannelType.GuildText)
+                .setRequired(false)
+        )
+        .addIntegerOption(option =>
+            option
+                .setName('koin_rate')
+                .setDescription('🎁 [OPTIONAL] Koin to IDR rate (default: 100)')
+                .setMinValue(1)
+                .setMaxValue(10000)
                 .setRequired(false)
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
@@ -227,6 +317,8 @@ module.exports = {
         const robloxId = interaction.options.getString('roblox_id');
         const discordUser = interaction.options.getUser('user');
         const fileNames = interaction.options.getString('files');
+        const bagiBagiChannel = interaction.options.getChannel('bagibagi_channel');
+        const koinRate = interaction.options.getInteger('koin_rate') || 100;
 
         try {
             await interaction.deferReply();
@@ -235,12 +327,65 @@ module.exports = {
             const key = generateKey();
             await saveLicense(robloxId, discordUser.id, key);
 
-            // Get specific attachments
+            // ════════════════════════════════════════════════════════════
+            // 🎁 BAGIBAGI REGISTRATION (if channel provided)
+            // ════════════════════════════════════════════════════════════
+
+            let bagiBagiRegistered = false;
+            let bagiBagiInfo = null;
+
+            if (bagiBagiChannel) {
+                // Validate bot permissions in the channel
+                const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
+                const permissions = bagiBagiChannel.permissionsFor(botMember);
+
+                if (!permissions.has(PermissionFlagsBits.ViewChannel) || 
+                    !permissions.has(PermissionFlagsBits.ReadMessageHistory) ||
+                    !permissions.has(PermissionFlagsBits.AddReactions)) {
+                    
+                    console.log(`[WARNING] Bot doesn't have permission in channel ${bagiBagiChannel.id}`);
+                    
+                    await interaction.followUp({
+                        content: 
+                            `⚠️ **BagiBagi channel registration skipped!**\n\n` +
+                            `Bot needs these permissions in <#${bagiBagiChannel.id}>:\n` +
+                            `• View Channel\n` +
+                            `• Read Message History\n` +
+                            `• Add Reactions\n\n` +
+                            `License was still created successfully.`,
+                        ephemeral: true
+                    });
+                } else {
+                    // Save to bagibagi-customers.json
+                    const customerName = discordUser.username;
+                    await saveBagiBagiCustomer(customerName, key, bagiBagiChannel.id, koinRate);
+                    
+                    bagiBagiRegistered = true;
+                    bagiBagiInfo = {
+                        channelId: bagiBagiChannel.id,
+                        koinRate: koinRate
+                    };
+
+                    console.log(`[BAGIBAGI] Registered customer: ${customerName}`);
+                    console.log(`   Key: ${key}`);
+                    console.log(`   Channel: ${bagiBagiChannel.name} (${bagiBagiChannel.id})`);
+                    console.log(`   Rate: 1 Koin = ${koinRate} IDR`);
+                }
+            }
+
+            // Get attachments
             const attachments = await getSpecificAttachments(fileNames);
 
             // Create embeds
-            const channelEmbed = createChannelEmbed(robloxId, discordUser.id, key, attachments.length);
-            const dmEmbed = createDMEmbed(robloxId, key, attachments.length);
+            const channelEmbed = createChannelEmbed(
+                robloxId, 
+                discordUser.id, 
+                key, 
+                attachments.length, 
+                bagiBagiRegistered,
+                bagiBagiInfo
+            );
+            const dmEmbed = createDMEmbed(robloxId, key, attachments.length, bagiBagiRegistered);
 
             // Send DM to user
             try {
@@ -248,7 +393,6 @@ module.exports = {
                     embeds: [dmEmbed]
                 };
 
-                // Add files if exist
                 if (attachments.length > 0) {
                     dmMessage.files = attachments;
                 }
@@ -256,22 +400,32 @@ module.exports = {
                 await discordUser.send(dmMessage);
 
                 // Reply in channel
+                let replyContent = `✅ License successfully sent to ${discordUser}!`;
+                if (bagiBagiRegistered) {
+                    replyContent += `\n🎁 BagiBagi listener registered to <#${bagiBagiChannel.id}>`;
+                }
+
                 await interaction.editReply({ 
                     embeds: [channelEmbed],
-                    content: `License successfully sent to ${discordUser}!`
+                    content: replyContent
                 });
 
                 console.log(`[LICENSE] Generated key for Roblox ID: ${robloxId}, Discord: ${discordUser.tag}`);
                 console.log(`[DM] Sent license + ${attachments.length} file(s) to ${discordUser.tag}`);
 
             } catch (dmError) {
-                // If DM fails (user has DMs closed)
                 console.error("[ERROR] Failed to send DM:", dmError);
                 
-                await interaction.editReply({ 
-                    content: `**License generated but couldn't send DM!**\n\n` +
+                let errorContent = `**⚠️ License generated but couldn't send DM!**\n\n` +
                              `${discordUser} has DMs disabled. Please send them the key manually:\n` +
-                             `\`\`\`${key}\`\`\``,
+                             `\`\`\`${key}\`\`\``;
+
+                if (bagiBagiRegistered) {
+                    errorContent += `\n🎁 BagiBagi listener was registered successfully.`;
+                }
+                
+                await interaction.editReply({ 
+                    content: errorContent,
                     embeds: [channelEmbed]
                 });
             }
@@ -279,7 +433,7 @@ module.exports = {
         } catch (err) {
             console.error("[ERROR] Failed to generate license:", err);
             
-            const errorMsg = "Failed to generate license. Please try again.";
+            const errorMsg = "❌ Failed to generate license. Please try again.\n```" + err.message + "```";
             
             if (interaction.deferred) {
                 await interaction.editReply({ content: errorMsg });
