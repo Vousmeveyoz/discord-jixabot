@@ -158,9 +158,9 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled
             {
                 name: "Delivery Status",
                 value: 
-                    ` License key sent via DM\n` +
-                    ` ${fileCount} file(s) delivered\n` +
-                    ` User notified successfully`,
+                    `License key sent via DM\n` +
+                    `${fileCount} file(s) delivered\n` +
+                    `User notified successfully`,
                 inline: false
             }
         );
@@ -171,7 +171,7 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled
         embed.addFields({
             name: "BagiBagi Listener",
             value: 
-                ` Registered successfully\n` +
+                `Registered successfully\n` +
                 `**Channel:** <#${channelInfo.channelId}>\n` +
                 `**Rate:** 1 Koin = ${channelInfo.koinRate} IDR ${rateLabel}\n` +
                 `**Key:** \`${key}\``,
@@ -213,11 +213,11 @@ function createDMEmbed(robloxId, key, fileCount, bagiBagiEnabled) {
             {
                 name: "How to Use",
                 value: 
-                    `\`1.\` Download all attached files below\n` +
-                    `\`2.\` Copy your license key above\n` +
-                    `\`3.\` Follow the setup instructions in the files\n` +
-                    `\`4.\` Paste your key\n` +
-                    `\`5.\` Enjoy your features blokmarket!\n\n` +
+                    `1. Download all attached files below\n` +
+                    `2. Copy your license key above\n` +
+                    `3. Follow the setup instructions in the files\n` +
+                    `4. Paste your key\n` +
+                    `5. Enjoy your features blokmarket!\n\n` +
                     `**Keep this key private - do not share!**`,
                 inline: false
             }
@@ -227,8 +227,7 @@ function createDMEmbed(robloxId, key, fileCount, bagiBagiEnabled) {
     if (bagiBagiEnabled) {
         embed.addFields({
             name: "BagiBagi Integration",
-            value: 
-                `You're now connected to bagibagi.co!` +
+            value: `You're now connected to bagibagi.co!`,
             inline: false
         });
     }
@@ -346,7 +345,7 @@ module.exports = {
                     
                     await interaction.followUp({
                         content: 
-                            `⚠️ **BagiBagi channel registration skipped!**\n\n` +
+                            `**BagiBagi channel registration skipped!**\n\n` +
                             `Bot needs these permissions in <#${bagiBagiChannel.id}>:\n` +
                             `• View Channel\n` +
                             `• Read Message History\n` +
@@ -432,7 +431,7 @@ module.exports = {
         } catch (err) {
             console.error("[ERROR] Failed to generate license:", err);
             
-            const errorMsg = `❌ Failed to generate license. Please try again.\n\`\`\`${err.message}\`\`\``;
+            const errorMsg = `Failed to generate license. Please try again.\n\`\`\`${err.message}\`\`\``;
             
             if (interaction.deferred) {
                 await interaction.editReply({ content: errorMsg });
@@ -441,4 +440,4 @@ module.exports = {
             }
         }
     }
-};
+}
