@@ -168,7 +168,7 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled
     // Add BagiBagi info if enabled
     if (bagiBagiEnabled && channelInfo) {
         embed.addFields({
-            name: "🎁 BagiBagi Listener",
+            name: "BagiBagi Listener",
             value: 
                 `\`✅\` Registered successfully\n` +
                 `**Channel:** <#${channelInfo.channelId}>\n` +
@@ -400,9 +400,9 @@ module.exports = {
                 await discordUser.send(dmMessage);
 
                 // Reply in channel
-                let replyContent = `✅ License successfully sent to ${discordUser}!`;
+                let replyContent = `License successfully sent to ${discordUser}!`;
                 if (bagiBagiRegistered) {
-                    replyContent += `\n🎁 BagiBagi listener registered to <#${bagiBagiChannel.id}>`;
+                    replyContent += `\nBagiBagi listener registered to <#${bagiBagiChannel.id}>`;
                 }
 
                 await interaction.editReply({ 
