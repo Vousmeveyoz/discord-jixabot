@@ -158,9 +158,9 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled
             {
                 name: "Delivery Status",
                 value: 
-                    `\`✅\` License key sent via DM\n` +
-                    `\`✅\` ${fileCount} file(s) delivered\n` +
-                    `\`✅\` User notified successfully`,
+                    ` License key sent via DM\n` +
+                    ` ${fileCount} file(s) delivered\n` +
+                    ` User notified successfully`,
                 inline: false
             }
         );
@@ -169,9 +169,9 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled
     if (bagiBagiEnabled && channelInfo) {
         const rateLabel = channelInfo.koinRate === 100 ? '(Production Default)' : '(Test Mode)';
         embed.addFields({
-            name: "🎁 BagiBagi Listener",
+            name: "BagiBagi Listener",
             value: 
-                `\`✅\` Registered successfully\n` +
+                ` Registered successfully\n` +
                 `**Channel:** <#${channelInfo.channelId}>\n` +
                 `**Rate:** 1 Koin = ${channelInfo.koinRate} IDR ${rateLabel}\n` +
                 `**Key:** \`${key}\``,
@@ -226,11 +226,9 @@ function createDMEmbed(robloxId, key, fileCount, bagiBagiEnabled) {
     // Add BagiBagi notice if enabled
     if (bagiBagiEnabled) {
         embed.addFields({
-            name: "🎁 BagiBagi Integration",
+            name: "BagiBagi Integration",
             value: 
-                `Your BagiBagi donations are now connected!\n` +
-                `Bot will automatically forward donations to your VPS.\n\n` +
-                `**Note:** Make sure BagiBagiAPP sends notifications to the registered channel.`,
+                `You're now connected to bagibagi.co!` 
             inline: false
         });
     }
@@ -267,14 +265,14 @@ module.exports = {
         .addChannelOption(option =>
             option
                 .setName('bagibagi_channel')
-                .setDescription('🎁 [OPTIONAL] Channel for BagiBagi webhook notifications')
+                .setDescription('[OPTIONAL] Channel for BagiBagi webhook notifications')
                 .addChannelTypes(ChannelType.GuildText)
                 .setRequired(false)
         )
         .addIntegerOption(option =>
             option
                 .setName('koin_rate')
-                .setDescription('🎁 [TEST MODE ONLY] Koin to IDR rate (default: 100, production uses platform rate)')
+                .setDescription('[TEST MODE ONLY] Koin to IDR rate (default: 100, production uses platform rate)')
                 .setMinValue(1)
                 .setMaxValue(10000)
                 .setRequired(false)
@@ -401,9 +399,9 @@ module.exports = {
                 await discordUser.send(dmMessage);
 
                 // Reply in channel
-                let replyContent = `✅ License successfully sent to ${discordUser}!`;
+                let replyContent = `License successfully sent to ${discordUser}!`;
                 if (bagiBagiRegistered) {
-                    replyContent += `\n🎁 BagiBagi listener registered to <#${bagiBagiChannel.id}>`;
+                    replyContent += `\nBagiBagi listener registered to <#${bagiBagiChannel.id}>`;
                 }
 
                 await interaction.editReply({ 
@@ -417,12 +415,12 @@ module.exports = {
             } catch (dmError) {
                 console.error("[ERROR] Failed to send DM:", dmError);
                 
-                let errorContent = `**⚠️ License generated but couldn't send DM!**\n\n` +
+                let errorContent = `**License generated but couldn't send DM!**\n\n` +
                              `${discordUser} has DMs disabled. Please send them the key manually:\n` +
                              `\`\`\`${key}\`\`\``;
 
                 if (bagiBagiRegistered) {
-                    errorContent += `\n🎁 BagiBagi listener was registered successfully.`;
+                    errorContent += `\nBagiBagi listener was registered successfully.`;
                 }
                 
                 await interaction.editReply({ 
