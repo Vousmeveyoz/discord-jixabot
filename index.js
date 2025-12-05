@@ -18,6 +18,7 @@ const bot = new Client({
 bot.commands = new Collection();
 
 const LICENSES_FILE = path.join(__dirname, "licenses.json");
+const BAGIBAGI_CUSTOMERS_FILE = path.join(__dirname, "bagibagi-customers.json");
 const API_PORT = process.env.API_PORT || 3000;
 
 // ════════════════════════════════════════════════════════════
@@ -25,20 +26,8 @@ const API_PORT = process.env.API_PORT || 3000;
 // ════════════════════════════════════════════════════════════
 
 const BAGIBAGI_CONFIG = {
-    // Channel ID dimana BagiBagiAPP mengirim notifikasi
-    CHANNEL_ID: process.env.BAGIBAGI_CHANNEL_ID || '',
-    
-    // VPS URL (ganti dengan IP VPS Anda)
-    VPS_URL: process.env.VPS_URL || 'http://localhost:8080',
-    
-    // User Key untuk Roblox
-    USER_KEY: process.env.BAGIBAGI_USER_KEY || '1PJQ-WNSE-ZAN7-OKNW',
-    
-    // Konversi koin ke IDR (1 Koin = 100 IDR)
-    KOIN_TO_IDR: parseInt(process.env.KOIN_TO_IDR || '100'),
-    
-    // Enable/disable BagiBagi listener
-    ENABLED: process.env.BAGIBAGI_ENABLED === 'true'
+    ENABLED: process.env.BAGIBAGI_ENABLED === 'true',
+    VPS_URL: process.env.VPS_URL || 'https://donate.blokmarket.xyz'
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -59,6 +48,30 @@ function readLicenses() {
 // Save licenses.json
 function saveLicenses(data) {
     fs.writeFileSync(LICENSES_FILE, JSON.stringify(data, null, 2));
+}
+
+// Read bagibagi-customers.json
+function readBagiBagiCustomers() {
+    try {
+        const data = fs.readFileSync(BAGIBAGI_CUSTOMERS_FILE, "utf8");
+        return JSON.parse(data);
+    } catch (err) {
+        if (err.code === "ENOENT") {
+            return { customers: [] };
+        }
+        throw err;
+    }
+}
+
+// Save bagibagi-customers.json
+function saveBagiBagiCustomers(data) {
+    fs.writeFileSync(BAGIBAGI_CUSTOMERS_FILE, JSON.stringify(data, null, 2));
+}
+
+// Find customer by channel ID
+function findCustomerByChannel(channelId) {
+    const data = readBagiBagiCustomers();
+    return data.customers.find(c => c.channelId === channelId);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -87,12 +100,9 @@ function parseBagiBagiMessage(content) {
         const donorMessage = messageMatch ? messageMatch[1] : '';
         
         return {
-            platform: 'bagibagi',
-            donor_name: 'BagiBagi Donor',
-            amount: koinAmount * BAGIBAGI_CONFIG.KOIN_TO_IDR,
-            koin: koinAmount,
-            message: donorMessage,
-            transaction_id: transactionId
+            koinAmount,
+            transactionId,
+            donorMessage
         };
     } catch (error) {
         console.error('[BAGIBAGI] ❌ Parse error:', error.message);
@@ -100,13 +110,22 @@ function parseBagiBagiMessage(content) {
     }
 }
 
-async function sendToVPS(donation) {
+async function sendToVPS(customer, parsedData) {
     try {
-        const url = `${BAGIBAGI_CONFIG.VPS_URL}/donation/${BAGIBAGI_CONFIG.USER_KEY}/webhook`;
+        const donationData = {
+            platform: 'bagibagi',
+            donor_name: 'BagiBagi Donor',
+            amount: parsedData.koinAmount * customer.koinRate,
+            koin: parsedData.koinAmount,
+            message: parsedData.donorMessage,
+            transaction_id: parsedData.transactionId
+        };
         
-        console.log(`[BAGIBAGI] 📤 Sending to VPS: ${url}`);
+        const url = `${BAGIBAGI_CONFIG.VPS_URL}/donation/${customer.userKey}/webhook`;
         
-        const response = await axios.post(url, donation, {
+        console.log(`[BAGIBAGI] 📤 Sending to: ${url}`);
+        
+        const response = await axios.post(url, donationData, {
             timeout: 5000,
             headers: {
                 'Content-Type': 'application/json'
@@ -265,11 +284,10 @@ bot.once("ready", (client) => {
     console.log(`⚡ Commands loaded: ${bot.commands.size}`);
     
     if (BAGIBAGI_CONFIG.ENABLED) {
+        const customers = readBagiBagiCustomers();
         console.log(`\n🎁 BagiBagi Listener: ENABLED`);
-        console.log(`   Channel ID: ${BAGIBAGI_CONFIG.CHANNEL_ID}`);
         console.log(`   VPS URL: ${BAGIBAGI_CONFIG.VPS_URL}`);
-        console.log(`   User Key: ${BAGIBAGI_CONFIG.USER_KEY}`);
-        console.log(`   Koin Rate: 1 Koin = ${BAGIBAGI_CONFIG.KOIN_TO_IDR} IDR\n`);
+        console.log(`   Registered customers: ${customers.customers.length}\n`);
     } else {
         console.log(`\n🎁 BagiBagi Listener: DISABLED\n`);
     }
@@ -280,37 +298,44 @@ bot.on("messageCreate", async (message) => {
     // Skip if BagiBagi listener is disabled
     if (!BAGIBAGI_CONFIG.ENABLED) return;
     
-    // Ignore non-bot messages or wrong channel
-    if (!message.author.bot || message.channel.id !== BAGIBAGI_CONFIG.CHANNEL_ID) {
-        return;
-    }
+    // Ignore non-bot messages
+    if (!message.author.bot) return;
     
     // Only listen to BagiBagiAPP
-    if (message.author.username !== 'BagiBagiAPP') {
+    if (message.author.username !== 'BagiBagiAPP') return;
+    
+    // Find customer by channel ID
+    const customer = findCustomerByChannel(message.channel.id);
+    
+    if (!customer) {
+        console.log(`[BAGIBAGI] ⚠️ Channel ${message.channel.id} not registered`);
         return;
     }
     
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`[BAGIBAGI] 📨 New message from: ${message.author.username}`);
+    console.log(`[BAGIBAGI] 📨 Message from BagiBagiAPP`);
+    console.log(`[BAGIBAGI] 👤 Customer: ${customer.name}`);
+    console.log(`[BAGIBAGI] 🔑 Key: ${customer.userKey}`);
     console.log(`[BAGIBAGI] 🕒 ${new Date().toLocaleString()}`);
     
     // Parse BagiBagi message
-    const donation = parseBagiBagiMessage(message.content);
+    const parsedData = parseBagiBagiMessage(message.content);
     
-    if (!donation) {
+    if (!parsedData) {
         console.log('[BAGIBAGI] ⚠️ Not a donation message');
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
         return;
     }
     
     console.log('[BAGIBAGI] ✅ Donation detected:');
-    console.log(`   Koin: ${donation.koin.toLocaleString()}`);
-    console.log(`   Amount: Rp ${donation.amount.toLocaleString('id-ID')}`);
-    console.log(`   Message: ${donation.message || '(no message)'}`);
-    console.log(`   Transaction: ${donation.transaction_id}`);
+    console.log(`   Koin: ${parsedData.koinAmount.toLocaleString()}`);
+    console.log(`   Rate: 1 Koin = ${customer.koinRate} IDR`);
+    console.log(`   Amount: Rp ${(parsedData.koinAmount * customer.koinRate).toLocaleString('id-ID')}`);
+    console.log(`   Message: ${parsedData.donorMessage || '(no message)'}`);
+    console.log(`   Transaction: ${parsedData.transactionId}`);
     
     // Send to VPS
-    const success = await sendToVPS(donation);
+    const success = await sendToVPS(customer, parsedData);
     
     if (success) {
         try {
