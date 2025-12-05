@@ -228,7 +228,7 @@ function createDMEmbed(robloxId, key, fileCount, bagiBagiEnabled) {
         embed.addFields({
             name: "BagiBagi Integration",
             value: 
-                `You're now connected to bagibagi.co!` 
+                `You're now connected to bagibagi.co!` +
             inline: false
         });
     }
