@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const http = require("http");
 const url = require("url");
+const axios = require("axios");
 
 // Initialize bot
 const bot = new Client({
@@ -18,6 +19,27 @@ bot.commands = new Collection();
 
 const LICENSES_FILE = path.join(__dirname, "licenses.json");
 const API_PORT = process.env.API_PORT || 3000;
+
+// ════════════════════════════════════════════════════════════
+// 🎁 BAGIBAGI CONFIGURATION
+// ════════════════════════════════════════════════════════════
+
+const BAGIBAGI_CONFIG = {
+    // Channel ID dimana BagiBagiAPP mengirim notifikasi
+    CHANNEL_ID: process.env.BAGIBAGI_CHANNEL_ID || '',
+    
+    // VPS URL (ganti dengan IP VPS Anda)
+    VPS_URL: process.env.VPS_URL || 'http://localhost:8080',
+    
+    // User Key untuk Roblox
+    USER_KEY: process.env.BAGIBAGI_USER_KEY || '1PJQ-WNSE-ZAN7-OKNW',
+    
+    // Konversi koin ke IDR (1 Koin = 100 IDR)
+    KOIN_TO_IDR: parseInt(process.env.KOIN_TO_IDR || '100'),
+    
+    // Enable/disable BagiBagi listener
+    ENABLED: process.env.BAGIBAGI_ENABLED === 'true'
+};
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -37,6 +59,66 @@ function readLicenses() {
 // Save licenses.json
 function saveLicenses(data) {
     fs.writeFileSync(LICENSES_FILE, JSON.stringify(data, null, 2));
+}
+
+// ════════════════════════════════════════════════════════════
+// 🎁 BAGIBAGI PARSER & SENDER
+// ════════════════════════════════════════════════════════════
+
+function parseBagiBagiMessage(content) {
+    try {
+        // Cek apakah pesan dari BagiBagiAPP
+        if (!content.includes('Seseorang mengirim') && !content.includes('Koin')) {
+            return null;
+        }
+        
+        // Extract koin amount
+        const koinMatch = content.match(/(\d{1,3}(?:,\d{3})*)\s*Koin/);
+        if (!koinMatch) return null;
+        
+        const koinAmount = parseInt(koinMatch[1].replace(/,/g, ''));
+        
+        // Extract Transaction ID
+        const idMatch = content.match(/Id Transaksi\s*`([^`]+)`/);
+        const transactionId = idMatch ? idMatch[1] : 'unknown';
+        
+        // Extract Message
+        const messageMatch = content.match(/Pesan\s*`([^`]*)`/);
+        const donorMessage = messageMatch ? messageMatch[1] : '';
+        
+        return {
+            platform: 'bagibagi',
+            donor_name: 'BagiBagi Donor',
+            amount: koinAmount * BAGIBAGI_CONFIG.KOIN_TO_IDR,
+            koin: koinAmount,
+            message: donorMessage,
+            transaction_id: transactionId
+        };
+    } catch (error) {
+        console.error('[BAGIBAGI] ❌ Parse error:', error.message);
+        return null;
+    }
+}
+
+async function sendToVPS(donation) {
+    try {
+        const url = `${BAGIBAGI_CONFIG.VPS_URL}/donation/${BAGIBAGI_CONFIG.USER_KEY}/webhook`;
+        
+        console.log(`[BAGIBAGI] 📤 Sending to VPS: ${url}`);
+        
+        const response = await axios.post(url, donation, {
+            timeout: 5000,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        console.log('[BAGIBAGI] ✅ Successfully sent to VPS');
+        return true;
+    } catch (error) {
+        console.error('[BAGIBAGI] ❌ Failed to send to VPS:', error.message);
+        return false;
+    }
 }
 
 // ==================== HTTP API SERVER ====================
@@ -172,11 +254,79 @@ async function loadCommands() {
     }
 }
 
+// ════════════════════════════════════════════════════════════
+// 🎯 BOT EVENTS
+// ════════════════════════════════════════════════════════════
+
 // Event: Bot Ready
 bot.once("ready", (client) => {
     console.log(`✅ Bot siap sebagai ${client.user.tag}`);
     console.log(`📊 Server count: ${client.guilds.cache.size}`);
     console.log(`⚡ Commands loaded: ${bot.commands.size}`);
+    
+    if (BAGIBAGI_CONFIG.ENABLED) {
+        console.log(`\n🎁 BagiBagi Listener: ENABLED`);
+        console.log(`   Channel ID: ${BAGIBAGI_CONFIG.CHANNEL_ID}`);
+        console.log(`   VPS URL: ${BAGIBAGI_CONFIG.VPS_URL}`);
+        console.log(`   User Key: ${BAGIBAGI_CONFIG.USER_KEY}`);
+        console.log(`   Koin Rate: 1 Koin = ${BAGIBAGI_CONFIG.KOIN_TO_IDR} IDR\n`);
+    } else {
+        console.log(`\n🎁 BagiBagi Listener: DISABLED\n`);
+    }
+});
+
+// Event: Message (BagiBagi Listener)
+bot.on("messageCreate", async (message) => {
+    // Skip if BagiBagi listener is disabled
+    if (!BAGIBAGI_CONFIG.ENABLED) return;
+    
+    // Ignore non-bot messages or wrong channel
+    if (!message.author.bot || message.channel.id !== BAGIBAGI_CONFIG.CHANNEL_ID) {
+        return;
+    }
+    
+    // Only listen to BagiBagiAPP
+    if (message.author.username !== 'BagiBagiAPP') {
+        return;
+    }
+    
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`[BAGIBAGI] 📨 New message from: ${message.author.username}`);
+    console.log(`[BAGIBAGI] 🕒 ${new Date().toLocaleString()}`);
+    
+    // Parse BagiBagi message
+    const donation = parseBagiBagiMessage(message.content);
+    
+    if (!donation) {
+        console.log('[BAGIBAGI] ⚠️ Not a donation message');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        return;
+    }
+    
+    console.log('[BAGIBAGI] ✅ Donation detected:');
+    console.log(`   Koin: ${donation.koin.toLocaleString()}`);
+    console.log(`   Amount: Rp ${donation.amount.toLocaleString('id-ID')}`);
+    console.log(`   Message: ${donation.message || '(no message)'}`);
+    console.log(`   Transaction: ${donation.transaction_id}`);
+    
+    // Send to VPS
+    const success = await sendToVPS(donation);
+    
+    if (success) {
+        try {
+            await message.react('✅');
+        } catch (e) {
+            console.log('[BAGIBAGI] ⚠️ Could not react to message');
+        }
+    } else {
+        try {
+            await message.react('❌');
+        } catch (e) {
+            console.log('[BAGIBAGI] ⚠️ Could not react to message');
+        }
+    }
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 });
 
 // Event: Interaction (Slash Commands)
