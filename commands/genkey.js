@@ -168,11 +168,11 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled
     // Add BagiBagi info if enabled
     if (bagiBagiEnabled && channelInfo) {
         embed.addFields({
-            name: "BagiBagi Listener",
+            name: "🎁 BagiBagi Listener",
             value: 
                 `\`✅\` Registered successfully\n` +
                 `**Channel:** <#${channelInfo.channelId}>\n` +
-                `**Rate:** 1 Koin = ${channelInfo.koinRate} IDR\n` +
+                `**Rate:** 1 Koin = ${channelInfo.koinRate} IDR ${channelInfo.koinRate === 100 ? '*(Production Default)*' : '*(Test Mode)*'}\n` +
                 `**Key:** \`${key}\``,
             inline: false
         });
@@ -273,7 +273,7 @@ module.exports = {
         .addIntegerOption(option =>
             option
                 .setName('koin_rate')
-                .setDescription('🎁 [OPTIONAL] Koin to IDR rate (default: 100)')
+                .setDescription('🎁 [TEST MODE ONLY] Koin to IDR rate (default: 100, production uses platform rate)')
                 .setMinValue(1)
                 .setMaxValue(10000)
                 .setRequired(false)
@@ -400,9 +400,9 @@ module.exports = {
                 await discordUser.send(dmMessage);
 
                 // Reply in channel
-                let replyContent = `License successfully sent to ${discordUser}!`;
+                let replyContent = `✅ License successfully sent to ${discordUser}!`;
                 if (bagiBagiRegistered) {
-                    replyContent += `\nBagiBagi listener registered to <#${bagiBagiChannel.id}>`;
+                    replyContent += `\n🎁 BagiBagi listener registered to <#${bagiBagiChannel.id}>`;
                 }
 
                 await interaction.editReply({ 
