@@ -25,6 +25,13 @@ function generateKey() {
     return Array.from({ length: KEY_SECTIONS }, section).join("-");
 }
 
+// Validate YouTube URL
+function isValidYouTubeUrl(url) {
+    if (!url) return false;
+    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)[\w-]{11}(\S*)?$/;
+    return youtubeRegex.test(url);
+}
+
 // Read licenses.json
 async function readLicenses() {
     try {
@@ -39,15 +46,21 @@ async function readLicenses() {
 }
 
 // Save license to file
-async function saveLicense(robloxId, discordId, key) {
+async function saveLicense(robloxId, discordId, key, youtubeUrl = null) {
     const data = await readLicenses();
     
-    data.licenses.push({
+    const licenseData = {
         robloxId,
         discordId,
         key,
         createdAt: new Date().toISOString()
-    });
+    };
+
+    if (youtubeUrl) {
+        licenseData.youtubeUrl = youtubeUrl;
+    }
+
+    data.licenses.push(licenseData);
 
     await fs.writeFile(LICENSES_FILE, JSON.stringify(data, null, 2));
 }
@@ -138,7 +151,7 @@ async function getSpecificAttachments(fileNames) {
 }
 
 // Create embed for channel
-function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled, channelInfo) {
+function createChannelEmbed(robloxId, discordId, key, fileCount, youtubeUrl, bagiBagiEnabled, channelInfo) {
     const embed = new EmbedBuilder()
         .setColor("#00FF87")
         .setTitle("LICENSE ACTIVATED")
@@ -160,6 +173,7 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled
                 value: 
                     `License key sent via DM\n` +
                     `${fileCount} file(s) delivered\n` +
+                    `${youtubeUrl ? 'YouTube tutorial included\n' : ''}` +
                     `User notified successfully`,
                 inline: false
             }
@@ -186,7 +200,7 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, bagiBagiEnabled
 }
 
 // Create embed for DM
-function createDMEmbed(robloxId, key, fileCount, bagiBagiEnabled) {
+function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled) {
     const embed = new EmbedBuilder()
         .setColor("#00FF87")
         .setTitle("YOUR LICENSE BLOKMARKET")
@@ -209,19 +223,29 @@ function createDMEmbed(robloxId, key, fileCount, bagiBagiEnabled) {
                 name: "Your License Key", 
                 value: `\`\`\`${key}\`\`\``,
                 inline: false
-            },
-            {
-                name: "How to Use",
-                value: 
-                    `1. Download all attached files below\n` +
-                    `2. Copy your license key above\n` +
-                    `3. Follow the setup instructions in the files\n` +
-                    `4. Paste your key\n` +
-                    `5. Enjoy your features blokmarket!\n\n` +
-                    `**Keep this key private - do not share!**`,
-                inline: false
             }
         );
+
+    // Add YouTube tutorial if provided
+    if (youtubeUrl) {
+        embed.addFields({
+            name: "Tutorial Video",
+            value: `Watch the setup guide:\n${youtubeUrl}`,
+            inline: false
+        });
+    }
+
+    embed.addFields({
+        name: "How to Use",
+        value: 
+            `1. Download all attached files below\n` +
+            `2. ${youtubeUrl ? 'Watch the tutorial video (optional)\n3. ' : ''}Copy your license key above\n` +
+            `${youtubeUrl ? '4' : '3'}. Follow the setup instructions in the files\n` +
+            `${youtubeUrl ? '5' : '4'}. Paste your key\n` +
+            `${youtubeUrl ? '6' : '5'}. Enjoy your features blokmarket!\n\n` +
+            `**Keep this key private - do not share!**`,
+        inline: false
+    });
 
     // Add BagiBagi notice if enabled
     if (bagiBagiEnabled) {
@@ -259,6 +283,12 @@ module.exports = {
             option
                 .setName('files')
                 .setDescription('File names to attach (comma separated, e.g: script.lua,readme.txt)')
+                .setRequired(false)
+        )
+        .addStringOption(option =>
+            option
+                .setName('youtube_url')
+                .setDescription('YouTube tutorial link (e.g: https://youtube.com/watch?v=xxxxx)')
                 .setRequired(false)
         )
         .addChannelOption(option =>
@@ -315,15 +345,29 @@ module.exports = {
         const robloxId = interaction.options.getString('roblox_id');
         const discordUser = interaction.options.getUser('user');
         const fileNames = interaction.options.getString('files');
+        const youtubeUrl = interaction.options.getString('youtube_url');
         const bagiBagiChannel = interaction.options.getChannel('bagibagi_channel');
         const koinRate = interaction.options.getInteger('koin_rate') || 100;
+
+        // Validate YouTube URL if provided
+        if (youtubeUrl && !isValidYouTubeUrl(youtubeUrl)) {
+            return await interaction.reply({
+                content: 
+                    "**Invalid YouTube URL!**\n\n" +
+                    "Please provide a valid YouTube link, for example:\n" +
+                    "• `https://youtube.com/watch?v=xxxxx`\n" +
+                    "• `https://youtu.be/xxxxx`\n" +
+                    "• `https://youtube.com/shorts/xxxxx`",
+                ephemeral: true
+            });
+        }
 
         try {
             await interaction.deferReply();
 
             // Generate license
             const key = generateKey();
-            await saveLicense(robloxId, discordUser.id, key);
+            await saveLicense(robloxId, discordUser.id, key, youtubeUrl);
 
             // ════════════════════════════════════════════════════════════
             // 🎁 BAGIBAGI REGISTRATION (if channel provided)
@@ -379,11 +423,12 @@ module.exports = {
                 robloxId, 
                 discordUser.id, 
                 key, 
-                attachments.length, 
+                attachments.length,
+                youtubeUrl,
                 bagiBagiRegistered,
                 bagiBagiInfo
             );
-            const dmEmbed = createDMEmbed(robloxId, key, attachments.length, bagiBagiRegistered);
+            const dmEmbed = createDMEmbed(robloxId, key, attachments.length, youtubeUrl, bagiBagiRegistered);
 
             // Send DM to user
             try {
@@ -399,6 +444,9 @@ module.exports = {
 
                 // Reply in channel
                 let replyContent = `License successfully sent to ${discordUser}!`;
+                if (youtubeUrl) {
+                    replyContent += `\nYouTube tutorial included.`;
+                }
                 if (bagiBagiRegistered) {
                     replyContent += `\nBagiBagi listener registered to <#${bagiBagiChannel.id}>`;
                 }
@@ -410,6 +458,9 @@ module.exports = {
 
                 console.log(`[LICENSE] Generated key for Roblox ID: ${robloxId}, Discord: ${discordUser.tag}`);
                 console.log(`[DM] Sent license + ${attachments.length} file(s) to ${discordUser.tag}`);
+                if (youtubeUrl) {
+                    console.log(`[YOUTUBE] Tutorial link: ${youtubeUrl}`);
+                }
 
             } catch (dmError) {
                 console.error("[ERROR] Failed to send DM:", dmError);
@@ -417,6 +468,10 @@ module.exports = {
                 let errorContent = `**License generated but couldn't send DM!**\n\n` +
                              `${discordUser} has DMs disabled. Please send them the key manually:\n` +
                              `\`\`\`${key}\`\`\``;
+
+                if (youtubeUrl) {
+                    errorContent += `\n\nYouTube Tutorial: ${youtubeUrl}`;
+                }
 
                 if (bagiBagiRegistered) {
                     errorContent += `\nBagiBagi listener was registered successfully.`;
