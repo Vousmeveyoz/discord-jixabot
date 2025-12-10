@@ -11,7 +11,7 @@ const KEY_SECTIONS = 4;
 const KEY_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
 const WEBHOOK_SERVER_URL = process.env.WEBHOOK_SERVER_URL || "http://localhost:8080";
-const WEBHOOK_MASTER_KEY = process.env.WEBHOOK_MASTER_KEY || "master_key_change_this";
+const WEBHOOK_MASTER_KEY = process.env.WEBHOOK_MASTER_KEY || "cf0019eebe678e7a47c87405e41e139c1e441c0ecac0eea06b54e52c6db2fa50";
 
 const ALLOWED_GUILDS = ["1412700210852794400"];
 
