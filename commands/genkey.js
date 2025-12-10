@@ -2,7 +2,6 @@ const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, AttachmentBuilde
 const fs = require('fs').promises;
 const path = require('path');
 
-// Constants
 const SCRIPT_ID = "DONATE_PLATFORM";
 const LICENSES_FILE = path.join(__dirname, "..", "licenses.json");
 const BAGIBAGI_CUSTOMERS_FILE = path.join(__dirname, "..", "bagibagi-customers.json");
@@ -11,86 +10,63 @@ const KEY_LENGTH = 4;
 const KEY_SECTIONS = 4;
 const KEY_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-const ALLOWED_GUILDS = [
-    "1412700210852794400", 
-];
+const WEBHOOK_SERVER_URL = process.env.WEBHOOK_SERVER_URL || "http://localhost:8080";
+const WEBHOOK_MASTER_KEY = process.env.WEBHOOK_MASTER_KEY || "master_key_change_this";
 
-// Generate License Key
+const ALLOWED_GUILDS = ["1412700210852794400"];
+
 function generateKey() {
     const section = () => 
         Array.from({ length: KEY_LENGTH }, () => 
             KEY_CHARS[Math.floor(Math.random() * KEY_CHARS.length)]
         ).join("");
-    
     return Array.from({ length: KEY_SECTIONS }, section).join("-");
 }
 
-// Validate YouTube URL
 function isValidYouTubeUrl(url) {
     if (!url) return false;
     const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)[\w-]{11}(\S*)?$/;
     return youtubeRegex.test(url);
 }
 
-// Read licenses.json
 async function readLicenses() {
     try {
         const data = await fs.readFile(LICENSES_FILE, "utf8");
         return JSON.parse(data);
     } catch (err) {
-        if (err.code === "ENOENT") {
-            return { licenses: [] };
-        }
+        if (err.code === "ENOENT") return { licenses: [] };
         throw err;
     }
 }
 
-// Save license to file
 async function saveLicense(robloxId, discordId, key, youtubeUrl = null) {
     const data = await readLicenses();
-    
     const licenseData = {
         robloxId,
         discordId,
         key,
         createdAt: new Date().toISOString()
     };
-
-    if (youtubeUrl) {
-        licenseData.youtubeUrl = youtubeUrl;
-    }
-
+    if (youtubeUrl) licenseData.youtubeUrl = youtubeUrl;
     data.licenses.push(licenseData);
-
     await fs.writeFile(LICENSES_FILE, JSON.stringify(data, null, 2));
 }
 
-// ════════════════════════════════════════════════════════════
-// 🎁 BAGIBAGI CUSTOMER FUNCTIONS
-// ════════════════════════════════════════════════════════════
-
-// Read bagibagi-customers.json
 async function readBagiBagiCustomers() {
     try {
         const data = await fs.readFile(BAGIBAGI_CUSTOMERS_FILE, "utf8");
         return JSON.parse(data);
     } catch (err) {
-        if (err.code === "ENOENT") {
-            return { customers: [] };
-        }
+        if (err.code === "ENOENT") return { customers: [] };
         throw err;
     }
 }
 
-// Save BagiBagi customer
 async function saveBagiBagiCustomer(customerName, userKey, channelId, koinRate) {
     const data = await readBagiBagiCustomers();
-    
-    // Check if customer already exists
     const existingIndex = data.customers.findIndex(c => c.userKey === userKey);
     
     if (existingIndex !== -1) {
-        // Update existing customer
         data.customers[existingIndex] = {
             name: customerName,
             userKey: userKey,
@@ -99,7 +75,6 @@ async function saveBagiBagiCustomer(customerName, userKey, channelId, koinRate) 
             updatedAt: new Date().toISOString()
         };
     } else {
-        // Add new customer
         data.customers.push({
             name: customerName,
             userKey: userKey,
@@ -108,35 +83,14 @@ async function saveBagiBagiCustomer(customerName, userKey, channelId, koinRate) 
             createdAt: new Date().toISOString()
         });
     }
-
     await fs.writeFile(BAGIBAGI_CUSTOMERS_FILE, JSON.stringify(data, null, 2));
 }
 
-// Get list of available files in attachments folder
-async function getAvailableFiles() {
-    try {
-        const files = await fs.readdir(ATTACHMENTS_DIR);
-        return files.filter(file => {
-            return !file.startsWith('.');
-        });
-    } catch (err) {
-        if (err.code === "ENOENT") {
-            return [];
-        }
-        throw err;
-    }
-}
-
-// Get specific attachments based on file names
 async function getSpecificAttachments(fileNames) {
     const attachments = [];
-    
-    if (!fileNames || fileNames.length === 0) {
-        return attachments;
-    }
+    if (!fileNames || fileNames.length === 0) return attachments;
 
     const requestedFiles = fileNames.split(',').map(f => f.trim());
-
     for (const fileName of requestedFiles) {
         try {
             const filePath = path.join(ATTACHMENTS_DIR, fileName);
@@ -146,12 +100,37 @@ async function getSpecificAttachments(fileNames) {
             console.log(`[WARNING] File not found: ${fileName}`);
         }
     }
-
     return attachments;
 }
 
-// Create embed for channel
-function createChannelEmbed(robloxId, discordId, key, fileCount, youtubeUrl, bagiBagiEnabled, channelInfo) {
+async function registerToWebhookServer(robloxId, discordId, discordUsername) {
+    try {
+        const response = await fetch(`${WEBHOOK_SERVER_URL}/admin/users/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': WEBHOOK_MASTER_KEY
+            },
+            body: JSON.stringify({ robloxId, discordId, discordUsername })
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        
+        return {
+            success: true,
+            userKey: data.userKey,
+            webhookUrl: data.webhookUrl,
+            apiKey: data.apiKey,
+            hmacSecret: data.hmacSecret
+        };
+    } catch (err) {
+        console.error('[WEBHOOK] Registration failed:', err.message);
+        return { success: false, error: err.message };
+    }
+}
+
+function createChannelEmbed(robloxId, discordId, key, fileCount, youtubeUrl, bagiBagiEnabled, channelInfo, webhookInfo) {
     const embed = new EmbedBuilder()
         .setColor("#00FF87")
         .setTitle("LICENSE ACTIVATED")
@@ -163,9 +142,7 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, youtubeUrl, bag
             },
             { 
                 name: "Owner Details", 
-                value: 
-                    `**Roblox ID:** \`${robloxId}\`\n` +
-                    `**Discord User:** <@${discordId}>`,
+                value: `**Roblox ID:** \`${robloxId}\`\n**Discord User:** <@${discordId}>`,
                 inline: false 
             },
             {
@@ -179,7 +156,17 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, youtubeUrl, bag
             }
         );
 
-    // Add BagiBagi info if enabled
+    if (webhookInfo && webhookInfo.success) {
+        embed.addFields({
+            name: "Webhook Server",
+            value: 
+                `Auto-registered successfully\n` +
+                `**Key:** \`${webhookInfo.userKey}\`\n` +
+                `**URL:** \`${webhookInfo.webhookUrl}\``,
+            inline: false
+        });
+    }
+
     if (bagiBagiEnabled && channelInfo) {
         const rateLabel = channelInfo.koinRate === 100 ? '(Production Default)' : '(Test Mode)';
         embed.addFields({
@@ -195,12 +182,10 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, youtubeUrl, bag
 
     embed.setTimestamp();
     embed.setFooter({ text: "License System • BLOKMARKET" });
-
     return embed;
 }
 
-// Create embed for DM
-function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled) {
+function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled, webhookInfo) {
     const embed = new EmbedBuilder()
         .setColor("#00FF87")
         .setTitle("YOUR LICENSE BLOKMARKET")
@@ -226,11 +211,22 @@ function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled) {
             }
         );
 
-    // Add YouTube tutorial if provided
     if (youtubeUrl) {
         embed.addFields({
             name: "Tutorial Video",
             value: `Watch the setup guide:\n${youtubeUrl}`,
+            inline: false
+        });
+    }
+
+    if (webhookInfo && webhookInfo.success) {
+        embed.addFields({
+            name: "Webhook Integration",
+            value: 
+                `Your donation webhook is ready!\n` +
+                `**Webhook URL:**\n\`\`\`${webhookInfo.webhookUrl}\`\`\`\n` +
+                `**API Key:**\n\`\`\`${webhookInfo.apiKey}\`\`\`\n` +
+                `Configure this in your donation platform.`,
             inline: false
         });
     }
@@ -247,7 +243,6 @@ function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled) {
         inline: false
     });
 
-    // Add BagiBagi notice if enabled
     if (bagiBagiEnabled) {
         embed.addFields({
             name: "BagiBagi Integration",
@@ -258,11 +253,9 @@ function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled) {
 
     embed.setTimestamp();
     embed.setFooter({ text: "License System • blokmarket!" });
-
     return embed;
 }
 
-// Export command
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('genkey')
@@ -301,7 +294,7 @@ module.exports = {
         .addIntegerOption(option =>
             option
                 .setName('koin_rate')
-                .setDescription('[TEST MODE ONLY] Koin to IDR rate (default: 100, production uses platform rate)')
+                .setDescription('[TEST MODE ONLY] Koin to IDR rate (default: 100)')
                 .setMinValue(1)
                 .setMaxValue(10000)
                 .setRequired(false)
@@ -310,7 +303,6 @@ module.exports = {
         .setDMPermission(false),
 
     async execute(interaction) {
-        // Check if command is used in a server (guild)
         if (!interaction.guild) {
             return await interaction.reply({
                 content: "**This command can only be used in a server!**",
@@ -318,9 +310,8 @@ module.exports = {
             });
         }
 
-        // 🔒 SECURITY: Check if server is whitelisted
         if (!ALLOWED_GUILDS.includes(interaction.guild.id)) {
-            console.log(`[SECURITY ALERT] Unauthorized /genkey attempt!`);
+            console.log(`[SECURITY] Unauthorized /genkey attempt`);
             console.log(`Server: ${interaction.guild.name} (${interaction.guild.id})`);
             console.log(`User: ${interaction.user.tag} (${interaction.user.id})`);
             
@@ -334,7 +325,6 @@ module.exports = {
             });
         }
 
-        // Check if user has Administrator permission
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return await interaction.reply({
                 content: "**You don't have permission to use this command!**\n> Required: Administrator",
@@ -349,7 +339,6 @@ module.exports = {
         const bagiBagiChannel = interaction.options.getChannel('bagibagi_channel');
         const koinRate = interaction.options.getInteger('koin_rate') || 100;
 
-        // Validate YouTube URL if provided
         if (youtubeUrl && !isValidYouTubeUrl(youtubeUrl)) {
             return await interaction.reply({
                 content: 
@@ -365,19 +354,26 @@ module.exports = {
         try {
             await interaction.deferReply();
 
-            // Generate license
             const key = generateKey();
             await saveLicense(robloxId, discordUser.id, key, youtubeUrl);
 
-            // ════════════════════════════════════════════════════════════
-            // 🎁 BAGIBAGI REGISTRATION (if channel provided)
-            // ════════════════════════════════════════════════════════════
+            const webhookResult = await registerToWebhookServer(
+                robloxId,
+                discordUser.id,
+                discordUser.username
+            );
+
+            if (webhookResult.success) {
+                console.log(`[WEBHOOK] Registered: ${webhookResult.userKey}`);
+                console.log(`[WEBHOOK] URL: ${webhookResult.webhookUrl}`);
+            } else {
+                console.log(`[WEBHOOK] Registration failed (server offline)`);
+            }
 
             let bagiBagiRegistered = false;
             let bagiBagiInfo = null;
 
             if (bagiBagiChannel) {
-                // Validate bot permissions in the channel
                 const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
                 const permissions = bagiBagiChannel.permissionsFor(botMember);
 
@@ -385,20 +381,17 @@ module.exports = {
                     !permissions.has(PermissionFlagsBits.ReadMessageHistory) ||
                     !permissions.has(PermissionFlagsBits.AddReactions)) {
                     
-                    console.log(`[WARNING] Bot doesn't have permission in channel ${bagiBagiChannel.id}`);
+                    console.log(`[WARNING] Missing permissions in channel ${bagiBagiChannel.id}`);
                     
                     await interaction.followUp({
                         content: 
                             `**BagiBagi channel registration skipped!**\n\n` +
                             `Bot needs these permissions in <#${bagiBagiChannel.id}>:\n` +
-                            `• View Channel\n` +
-                            `• Read Message History\n` +
-                            `• Add Reactions\n\n` +
+                            `• View Channel\n• Read Message History\n• Add Reactions\n\n` +
                             `License was still created successfully.`,
                         ephemeral: true
                     });
                 } else {
-                    // Save to bagibagi-customers.json
                     const customerName = discordUser.username;
                     await saveBagiBagiCustomer(customerName, key, bagiBagiChannel.id, koinRate);
                     
@@ -408,17 +401,14 @@ module.exports = {
                         koinRate: koinRate
                     };
 
-                    console.log(`[BAGIBAGI] Registered customer: ${customerName}`);
-                    console.log(`   Key: ${key}`);
-                    console.log(`   Channel: ${bagiBagiChannel.name} (${bagiBagiChannel.id})`);
-                    console.log(`   Rate: 1 Koin = ${koinRate} IDR`);
+                    console.log(`[BAGIBAGI] Registered: ${customerName}`);
+                    console.log(`[BAGIBAGI] Key: ${key}`);
+                    console.log(`[BAGIBAGI] Channel: ${bagiBagiChannel.name} (${bagiBagiChannel.id})`);
+                    console.log(`[BAGIBAGI] Rate: 1 Koin = ${koinRate} IDR`);
                 }
             }
 
-            // Get attachments
             const attachments = await getSpecificAttachments(fileNames);
-
-            // Create embeds
             const channelEmbed = createChannelEmbed(
                 robloxId, 
                 discordUser.id, 
@@ -426,55 +416,49 @@ module.exports = {
                 attachments.length,
                 youtubeUrl,
                 bagiBagiRegistered,
-                bagiBagiInfo
+                bagiBagiInfo,
+                webhookResult
             );
-            const dmEmbed = createDMEmbed(robloxId, key, attachments.length, youtubeUrl, bagiBagiRegistered);
+            const dmEmbed = createDMEmbed(
+                robloxId, 
+                key, 
+                attachments.length, 
+                youtubeUrl, 
+                bagiBagiRegistered,
+                webhookResult
+            );
 
-            // Send DM to user
             try {
-                const dmMessage = {
-                    embeds: [dmEmbed]
-                };
-
-                if (attachments.length > 0) {
-                    dmMessage.files = attachments;
-                }
-
+                const dmMessage = { embeds: [dmEmbed] };
+                if (attachments.length > 0) dmMessage.files = attachments;
                 await discordUser.send(dmMessage);
 
-                // Reply in channel
                 let replyContent = `License successfully sent to ${discordUser}!`;
-                if (youtubeUrl) {
-                    replyContent += `\nYouTube tutorial included.`;
-                }
-                if (bagiBagiRegistered) {
-                    replyContent += `\nBagiBagi listener registered to <#${bagiBagiChannel.id}>`;
-                }
+                if (youtubeUrl) replyContent += `\nYouTube tutorial included.`;
+                if (bagiBagiRegistered) replyContent += `\nBagiBagi listener registered to <#${bagiBagiChannel.id}>`;
+                if (webhookResult.success) replyContent += `\nWebhook server registered.`;
 
                 await interaction.editReply({ 
                     embeds: [channelEmbed],
                     content: replyContent
                 });
 
-                console.log(`[LICENSE] Generated key for Roblox ID: ${robloxId}, Discord: ${discordUser.tag}`);
+                console.log(`[LICENSE] Generated for Roblox: ${robloxId}, Discord: ${discordUser.tag}`);
                 console.log(`[DM] Sent license + ${attachments.length} file(s) to ${discordUser.tag}`);
-                if (youtubeUrl) {
-                    console.log(`[YOUTUBE] Tutorial link: ${youtubeUrl}`);
-                }
+                if (youtubeUrl) console.log(`[YOUTUBE] ${youtubeUrl}`);
 
             } catch (dmError) {
                 console.error("[ERROR] Failed to send DM:", dmError);
                 
-                let errorContent = `**License generated but couldn't send DM!**\n\n` +
-                             `${discordUser} has DMs disabled. Please send them the key manually:\n` +
-                             `\`\`\`${key}\`\`\``;
+                let errorContent = 
+                    `**License generated but couldn't send DM!**\n\n` +
+                    `${discordUser} has DMs disabled. Please send them the key manually:\n` +
+                    `\`\`\`${key}\`\`\``;
 
-                if (youtubeUrl) {
-                    errorContent += `\n\nYouTube Tutorial: ${youtubeUrl}`;
-                }
-
-                if (bagiBagiRegistered) {
-                    errorContent += `\nBagiBagi listener was registered successfully.`;
+                if (youtubeUrl) errorContent += `\n\nYouTube Tutorial: ${youtubeUrl}`;
+                if (bagiBagiRegistered) errorContent += `\nBagiBagi listener was registered successfully.`;
+                if (webhookResult.success) {
+                    errorContent += `\n\n**Webhook Details:**\n\`\`\`${webhookResult.webhookUrl}\`\`\``;
                 }
                 
                 await interaction.editReply({ 
