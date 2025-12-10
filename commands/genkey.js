@@ -105,10 +105,10 @@ async function getSpecificAttachments(fileNames) {
 
 async function registerToWebhookServer(robloxId, discordId, discordUsername) {
     try {
-        console.log(`[WEBHOOK] Attempting registration...`);
-        console.log(`[WEBHOOK] URL: ${WEBHOOK_SERVER_URL}/admin/users/register`);
+        console.log(`[WEBHOOK] Attempting registration...`);  // ✅ Perbaiki ini
+        console.log(`[WEBHOOK] URL: ${WEBHOOK_SERVER_URL}/admin/users/register`);  // ✅ Perbaiki ini
         
-        const response = await fetch(`${WEBHOOK_SERVER_URL}/admin/users/register`, {
+        const response = await fetch(`${WEBHOOK_SERVER_URL}/admin/users/register`, {  // ✅ Perbaiki ini
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
