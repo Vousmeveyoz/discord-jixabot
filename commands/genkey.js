@@ -105,6 +105,9 @@ async function getSpecificAttachments(fileNames) {
 
 async function registerToWebhookServer(robloxId, discordId, discordUsername) {
     try {
+        console.log(`[WEBHOOK] Attempting registration...`);
+        console.log(`[WEBHOOK] URL: ${WEBHOOK_SERVER_URL}/admin/users/register`);
+        
         const response = await fetch(`${WEBHOOK_SERVER_URL}/admin/users/register`, {
             method: 'POST',
             headers: {
@@ -114,8 +117,19 @@ async function registerToWebhookServer(robloxId, discordId, discordUsername) {
             body: JSON.stringify({ robloxId, discordId, discordUsername })
         });
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
+        const responseText = await response.text();
+        console.log(`[WEBHOOK] Response status: ${response.status}`);
+        console.log(`[WEBHOOK] Response body: ${responseText}`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${responseText}`);
+        }
+        
+        const data = JSON.parse(responseText);
+        
+        console.log(`[WEBHOOK] ✅ Registration successful!`);
+        console.log(`[WEBHOOK] UserKey: ${data.userKey}`);
+        console.log(`[WEBHOOK] API Key: ${data.apiKey}`);
         
         return {
             success: true,
@@ -125,8 +139,11 @@ async function registerToWebhookServer(robloxId, discordId, discordUsername) {
             hmacSecret: data.hmacSecret
         };
     } catch (err) {
-        console.error('[WEBHOOK] Registration failed:', err.message);
-        return { success: false, error: err.message };
+        console.error('[WEBHOOK] ❌ Registration failed:', err.message);
+        return { 
+            success: false, 
+            error: err.message 
+        };
     }
 }
 
@@ -158,11 +175,17 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, youtubeUrl, bag
 
     if (webhookInfo && webhookInfo.success) {
         embed.addFields({
-            name: "Webhook Server",
+            name: "✅ Webhook Server Registered",
             value: 
-                `Auto-registered successfully\n` +
-                `**Key:** \`${webhookInfo.userKey}\`\n` +
-                `**URL:** \`${webhookInfo.webhookUrl}\``,
+                `**User Key:** \`${webhookInfo.userKey}\`\n` +
+                `**Webhook URL:**\n\`${webhookInfo.webhookUrl}\`\n` +
+                `**API Key:** \`${webhookInfo.apiKey.substring(0, 20)}...\``,
+            inline: false
+        });
+    } else if (webhookInfo && !webhookInfo.success) {
+        embed.addFields({
+            name: "⚠️ Webhook Server (Failed)",
+            value: `Error: ${webhookInfo.error || 'Server unreachable'}`,
             inline: false
         });
     }
@@ -219,14 +242,26 @@ function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled, we
         });
     }
 
+    // FIX: Check if webhook registration was successful
     if (webhookInfo && webhookInfo.success) {
         embed.addFields({
-            name: "Webhook Integration",
+            name: "🔗 Webhook Integration (READY!)",
             value: 
-                `Your donation webhook is ready!\n` +
+                `Your donation webhook is automatically configured!\n\n` +
                 `**Webhook URL:**\n\`\`\`${webhookInfo.webhookUrl}\`\`\`\n` +
                 `**API Key:**\n\`\`\`${webhookInfo.apiKey}\`\`\`\n` +
-                `Configure this in your donation platform.`,
+                `**HMAC Secret:**\n\`\`\`${webhookInfo.hmacSecret}\`\`\`\n\n` +
+                `⚠️ **IMPORTANT:** Save these credentials securely!\n` +
+                `Configure them in your donation platform (Saweria, Sociabuzz, etc.)`,
+            inline: false
+        });
+    } else if (webhookInfo && !webhookInfo.success) {
+        embed.addFields({
+            name: "⚠️ Webhook Integration (Failed)",
+            value: 
+                `Webhook server registration failed.\n` +
+                `Error: ${webhookInfo.error || 'Unknown error'}\n\n` +
+                `Please contact support for manual webhook setup.`,
             inline: false
         });
     }
@@ -238,8 +273,9 @@ function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled, we
             `2. ${youtubeUrl ? 'Watch the tutorial video (optional)\n3. ' : ''}Copy your license key above\n` +
             `${youtubeUrl ? '4' : '3'}. Follow the setup instructions in the files\n` +
             `${youtubeUrl ? '5' : '4'}. Paste your key\n` +
-            `${youtubeUrl ? '6' : '5'}. Enjoy your features blokmarket!\n\n` +
-            `**Keep this key private - do not share!**`,
+            `${youtubeUrl ? '6' : '5'}. ${webhookInfo?.success ? 'Configure webhook credentials in your donation platform\n' : ''}` +
+            `${youtubeUrl ? '7' : '6'}. Enjoy your features blokmarket!\n\n` +
+            `**Keep this key and credentials private - do not share!**`,
         inline: false
     });
 
@@ -357,17 +393,24 @@ module.exports = {
             const key = generateKey();
             await saveLicense(robloxId, discordUser.id, key, youtubeUrl);
 
+            console.log(`[LICENSE] Generated key: ${key}`);
+            console.log(`[LICENSE] For: ${discordUser.username} (Roblox: ${robloxId})`);
+
+            // Register to webhook server
             const webhookResult = await registerToWebhookServer(
                 robloxId,
                 discordUser.id,
                 discordUser.username
             );
 
+            // Log webhook registration result
             if (webhookResult.success) {
-                console.log(`[WEBHOOK] Registered: ${webhookResult.userKey}`);
-                console.log(`[WEBHOOK] URL: ${webhookResult.webhookUrl}`);
+                console.log(`[WEBHOOK] ✅ Successfully registered!`);
+                console.log(`[WEBHOOK] UserKey: ${webhookResult.userKey}`);
+                console.log(`[WEBHOOK] WebhookURL: ${webhookResult.webhookUrl}`);
+                console.log(`[WEBHOOK] APIKey: ${webhookResult.apiKey}`);
             } else {
-                console.log(`[WEBHOOK] Registration failed (server offline)`);
+                console.log(`[WEBHOOK] ❌ Registration failed: ${webhookResult.error}`);
             }
 
             let bagiBagiRegistered = false;
@@ -433,18 +476,21 @@ module.exports = {
                 if (attachments.length > 0) dmMessage.files = attachments;
                 await discordUser.send(dmMessage);
 
-                let replyContent = `License successfully sent to ${discordUser}!`;
-                if (youtubeUrl) replyContent += `\nYouTube tutorial included.`;
-                if (bagiBagiRegistered) replyContent += `\nBagiBagi listener registered to <#${bagiBagiChannel.id}>`;
-                if (webhookResult.success) replyContent += `\nWebhook server registered.`;
+                let replyContent = `✅ License successfully sent to ${discordUser}!`;
+                if (youtubeUrl) replyContent += `\n📺 YouTube tutorial included.`;
+                if (bagiBagiRegistered) replyContent += `\n🔔 BagiBagi listener registered to <#${bagiBagiChannel.id}>`;
+                if (webhookResult.success) {
+                    replyContent += `\n🔗 Webhook server registered successfully!`;
+                } else {
+                    replyContent += `\n⚠️ Webhook registration failed: ${webhookResult.error}`;
+                }
 
                 await interaction.editReply({ 
                     embeds: [channelEmbed],
                     content: replyContent
                 });
 
-                console.log(`[LICENSE] Generated for Roblox: ${robloxId}, Discord: ${discordUser.tag}`);
-                console.log(`[DM] Sent license + ${attachments.length} file(s) to ${discordUser.tag}`);
+                console.log(`[DM] ✅ Sent license + ${attachments.length} file(s) to ${discordUser.tag}`);
                 if (youtubeUrl) console.log(`[YOUTUBE] ${youtubeUrl}`);
 
             } catch (dmError) {
@@ -458,7 +504,7 @@ module.exports = {
                 if (youtubeUrl) errorContent += `\n\nYouTube Tutorial: ${youtubeUrl}`;
                 if (bagiBagiRegistered) errorContent += `\nBagiBagi listener was registered successfully.`;
                 if (webhookResult.success) {
-                    errorContent += `\n\n**Webhook Details:**\n\`\`\`${webhookResult.webhookUrl}\`\`\``;
+                    errorContent += `\n\n**Webhook Details:**\n\`\`\`${webhookResult.webhookUrl}\n${webhookResult.apiKey}\`\`\``;
                 }
                 
                 await interaction.editReply({ 
