@@ -98,31 +98,28 @@ async function sendToWebhookServer(customer, parsedData) {
         
         const webhookUrl = `${BAGIBAGI_CONFIG.VPS_URL}/donation/${customer.userKey}/webhook`;
         
-        const timestamp = Math.floor(Date.now() / 1000);
-        const crypto = require('crypto');
-        const signedPayload = `${timestamp}.${JSON.stringify(donationData)}`;
+        console.log(`[BAGIBAGI] 📤 Sending to webhook server...`);
+        console.log(`[BAGIBAGI] URL: ${webhookUrl}`);
+        console.log(`[BAGIBAGI] Data:`, JSON.stringify(donationData, null, 2));
         
-        const hmacSecret = customer.hmacSecret || 'default_secret';
-        const signature = crypto
-            .createHmac('sha256', hmacSecret)
-            .update(signedPayload)
-            .digest('hex');
-        
-        console.log(`[BAGIBAGI] Sending to: ${webhookUrl}`);
-        
+        // IMPORTANT: No HMAC signature needed - server doesn't verify it
         const response = await axios.post(webhookUrl, donationData, {
             timeout: 5000,
             headers: {
-                'Content-Type': 'application/json',
-                'X-Webhook-Signature': signature,
-                'X-Webhook-Timestamp': timestamp.toString()
+                'Content-Type': 'application/json'
+                // No X-Webhook-Signature or X-Webhook-Timestamp needed!
             }
         });
         
-        console.log('[BAGIBAGI] Successfully sent to webhook server');
+        console.log(`[BAGIBAGI] ✅ Response:`, response.status, response.data);
         return true;
     } catch (error) {
-        console.error('[BAGIBAGI] Failed to send:', error.message);
+        if (error.response) {
+            console.error(`[BAGIBAGI] ❌ Server error: ${error.response.status}`);
+            console.error(`[BAGIBAGI] Response:`, error.response.data);
+        } else {
+            console.error(`[BAGIBAGI] ❌ Request failed:`, error.message);
+        }
         return false;
     }
 }
@@ -171,7 +168,7 @@ const server = http.createServer((req, res) => {
                         success: false,
                         message: "Invalid license key"
                     }));
-                    console.log(`[API] Invalid key attempt: ${key}`);
+                    console.log(`[API] ❌ Invalid key: ${key}`);
                     return;
                 }
 
@@ -181,7 +178,7 @@ const server = http.createServer((req, res) => {
                         success: false,
                         message: "License key does not match Roblox ID"
                     }));
-                    console.log(`[API] Roblox ID mismatch: ${key}`);
+                    console.log(`[API] ❌ Roblox ID mismatch: ${key}`);
                     return;
                 }
 
@@ -196,11 +193,13 @@ const server = http.createServer((req, res) => {
                         robloxId: license.robloxId,
                         discordId: license.discordId,
                         createdAt: license.createdAt,
-                        lastUsed: license.lastUsed
+                        lastUsed: license.lastUsed,
+                        webhookUrl: license.webhookUrl || null,
+                        webhookUserKey: license.webhookUserKey || null
                     }
                 }));
 
-                console.log(`[API] Validated: ${key} | Roblox ID: ${license.robloxId}`);
+                console.log(`[API] ✅ Validated: ${key} | Roblox: ${license.robloxId}`);
 
             } catch (err) {
                 console.error("[API ERROR]", err);
@@ -233,9 +232,9 @@ async function loadCommands() {
 
             if (command.data?.name) {
                 bot.commands.set(command.data.name, command);
-                console.log(`[COMMAND] Loaded: ${command.data.name}`);
+                console.log(`[COMMAND] ✅ Loaded: ${command.data.name}`);
             } else {
-                console.warn(`[WARNING] Command file ${file} is missing data.name`);
+                console.warn(`[WARNING] ⚠️ Command ${file} missing data.name`);
             }
         }
     } catch (err) {
@@ -246,19 +245,23 @@ async function loadCommands() {
 }
 
 bot.once("ready", (client) => {
-    console.log(`Bot ready as ${client.user.tag}`);
-    console.log(`Servers: ${client.guilds.cache.size}`);
-    console.log(`Commands: ${bot.commands.size}`);
-    console.log(`Webhook Server: ${WEBHOOK_CONFIG.SERVER_URL}`);
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🤖 DISCORD BOT READY`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`👤 Logged in as: ${client.user.tag}`);
+    console.log(`🏠 Servers: ${client.guilds.cache.size}`);
+    console.log(`⚙️  Commands: ${bot.commands.size}`);
+    console.log(`🔗 Webhook Server: ${WEBHOOK_CONFIG.SERVER_URL}`);
     
     if (BAGIBAGI_CONFIG.ENABLED) {
         const customers = readBagiBagiCustomers();
-        console.log(`BagiBagi Listener: ENABLED`);
-        console.log(`VPS URL: ${BAGIBAGI_CONFIG.VPS_URL}`);
-        console.log(`Registered customers: ${customers.customers.length}`);
+        console.log(`🎁 BagiBagi: ENABLED`);
+        console.log(`📡 VPS URL: ${BAGIBAGI_CONFIG.VPS_URL}`);
+        console.log(`👥 Customers: ${customers.customers.length}`);
     } else {
-        console.log(`BagiBagi Listener: DISABLED`);
+        console.log(`🎁 BagiBagi: DISABLED`);
     }
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
 });
 
 bot.on("messageCreate", async (message) => {
@@ -270,30 +273,32 @@ bot.on("messageCreate", async (message) => {
     if (!customer) return;
     
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`[BAGIBAGI] Message from BagiBagiAPP`);
-    console.log(`[BAGIBAGI] Customer: ${customer.name}`);
-    console.log(`[BAGIBAGI] Key: ${customer.userKey}`);
+    console.log(`[BAGIBAGI] 📨 New Message from BagiBagiAPP`);
+    console.log(`[BAGIBAGI] 👤 Customer: ${customer.name}`);
+    console.log(`[BAGIBAGI] 🔑 UserKey: ${customer.userKey}`);
+    console.log(`[BAGIBAGI] 📍 Channel: ${message.channel.name}`);
     
     const parsedData = parseBagiBagiMessage(message.content);
     if (!parsedData) {
-        console.log('[BAGIBAGI] Not a donation message');
+        console.log('[BAGIBAGI] ⚠️ Not a donation message');
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
         return;
     }
     
-    console.log('[BAGIBAGI] Donation detected:');
-    console.log(`   Koin: ${parsedData.koinAmount.toLocaleString()}`);
-    console.log(`   Rate: 1 Koin = ${customer.koinRate} IDR`);
-    console.log(`   Amount: Rp ${(parsedData.koinAmount * customer.koinRate).toLocaleString('id-ID')}`);
-    console.log(`   Message: ${parsedData.donorMessage || '(no message)'}`);
-    console.log(`   Transaction: ${parsedData.transactionId}`);
+    console.log('[BAGIBAGI] 💰 Donation Detected:');
+    console.log(`   🪙 Koin: ${parsedData.koinAmount.toLocaleString()}`);
+    console.log(`   💱 Rate: 1 Koin = ${customer.koinRate} IDR`);
+    console.log(`   💵 Amount: Rp ${(parsedData.koinAmount * customer.koinRate).toLocaleString('id-ID')}`);
+    console.log(`   💬 Message: ${parsedData.donorMessage || '(no message)'}`);
+    console.log(`   🆔 Transaction: ${parsedData.transactionId}`);
     
     const success = await sendToWebhookServer(customer, parsedData);
     
     try {
         await message.react(success ? '✅' : '❌');
+        console.log(`[BAGIBAGI] ${success ? '✅' : '❌'} Reacted to message`);
     } catch (e) {
-        console.log('[BAGIBAGI] Could not react to message');
+        console.log('[BAGIBAGI] ⚠️ Could not react to message');
     }
     
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
@@ -311,7 +316,7 @@ bot.on("interactionCreate", async (interaction) => {
         console.error(`[ERROR] Command '${interaction.commandName}' failed:`, err);
 
         const errorMsg = {
-            content: "Error executing command.",
+            content: "❌ Error executing command.",
             flags: MessageFlags.Ephemeral
         };
 
@@ -339,38 +344,43 @@ bot.on("warn", (info) => {
 
 (async () => {
     try {
-        console.log("[INIT] Loading commands...");
+        console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.log("🚀 STARTING DISCORD BOT...");
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        
+        console.log("[INIT] 📂 Loading commands...");
         await loadCommands();
 
-        console.log("[INIT] Starting HTTP API server...");
+        console.log("[INIT] 🌐 Starting HTTP API server...");
         server.listen(API_PORT, () => {
-            console.log(`API Server running on port ${API_PORT}`);
-            console.log(`Validation endpoint: http://localhost:${API_PORT}/api/validate`);
+            console.log(`[API] ✅ Server running on port ${API_PORT}`);
+            console.log(`[API] 📍 Endpoint: http://localhost:${API_PORT}/api/validate`);
         });
 
-        console.log("[INIT] Logging in to Discord...");
+        console.log("[INIT] 🔐 Logging in to Discord...");
         await bot.login(process.env.DISCORD_TOKEN);
 
     } catch (err) {
-        console.error("[FATAL] Failed to start bot:", err);
+        console.error("\n[FATAL] ❌ Failed to start bot:", err);
         process.exit(1);
     }
 })();
 
 process.on("SIGINT", () => {
-    console.log("\n[SHUTDOWN] Closing connections...");
+    console.log("\n[SHUTDOWN] 🛑 Closing connections...");
     server.close(() => {
-        console.log("[SHUTDOWN] HTTP server closed");
+        console.log("[SHUTDOWN] ✅ HTTP server closed");
     });
     bot.destroy();
+    console.log("[SHUTDOWN] ✅ Bot disconnected");
     process.exit(0);
 });
 
 process.on("unhandledRejection", (error) => {
-    console.error("[UNHANDLED REJECTION]", error);
+    console.error("[UNHANDLED REJECTION] ⚠️", error);
 });
 
 process.on("uncaughtException", (error) => {
-    console.error("[UNCAUGHT EXCEPTION]", error);
+    console.error("[UNCAUGHT EXCEPTION] ❌", error);
     process.exit(1);
 });
