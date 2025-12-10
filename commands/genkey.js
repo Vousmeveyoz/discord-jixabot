@@ -133,7 +133,7 @@ async function registerToWebhookServer(robloxId, discordId, discordUsername) {
         console.log(`[WEBHOOK] Response Status: ${response.status}`);
         
         if (!response.ok) {
-            console.log(`[WEBHOOK] ❌ Registration Failed!`);
+            console.log(`[WEBHOOK] Registration Failed`);
             console.log(`[WEBHOOK] Error: ${responseText}`);
             console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
             throw new Error(`HTTP ${response.status}: ${responseText}`);
@@ -141,7 +141,7 @@ async function registerToWebhookServer(robloxId, discordId, discordUsername) {
         
         const data = JSON.parse(responseText);
         
-        console.log(`[WEBHOOK] ✅ Registration Successful!`);
+        console.log(`[WEBHOOK] Registration Successful`);
         console.log(`[WEBHOOK] User Key: ${data.userKey}`);
         console.log(`[WEBHOOK] Webhook URL: ${data.webhookUrl}`);
         console.log(`[WEBHOOK] API Key: ${data.apiKey.substring(0, 20)}...`);
@@ -154,7 +154,7 @@ async function registerToWebhookServer(robloxId, discordId, discordUsername) {
             apiKey: data.apiKey
         };
     } catch (err) {
-        console.error('[WEBHOOK] ❌ Registration Error:', err.message);
+        console.error('[WEBHOOK] Registration Error:', err.message);
         console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
         return { 
             success: false, 
@@ -166,47 +166,46 @@ async function registerToWebhookServer(robloxId, discordId, discordUsername) {
 function createChannelEmbed(robloxId, discordId, key, fileCount, youtubeUrl, bagiBagiEnabled, channelInfo, webhookInfo) {
     const embed = new EmbedBuilder()
         .setColor("#00FF87")
-        .setTitle("✅ LICENSE ACTIVATED")
+        .setTitle("LICENSE ACTIVATED")
         .addFields(
             { 
-                name: "📦 Package Information", 
+                name: "Package Information", 
                 value: `\`\`\`yaml\nScript: ${SCRIPT_ID}\n\`\`\``,
                 inline: false 
             },
             { 
-                name: "👤 Owner Details", 
+                name: "Owner Details", 
                 value: `**Roblox ID:** \`${robloxId}\`\n**Discord User:** <@${discordId}>`,
                 inline: false 
             },
             {
-                name: "📬 Delivery Status",
+                name: "Delivery Status",
                 value: 
-                    `✅ License key sent via DM\n` +
-                    `✅ ${fileCount} file(s) delivered\n` +
-                    `${youtubeUrl ? '✅ YouTube tutorial included\n' : ''}` +
-                    `✅ User notified successfully`,
+                    `License key sent via DM\n` +
+                    `${fileCount} file(s) delivered\n` +
+                    `${youtubeUrl ? 'YouTube tutorial included\n' : ''}` +
+                    `User notified successfully`,
                 inline: false
             }
         );
 
     if (webhookInfo && webhookInfo.success) {
         embed.addFields({
-            name: "🔗 Webhook Server Integration",
+            name: "Webhook Server Integration",
             value: 
-                `**Status:** ✅ Successfully Registered\n` +
+                `**Status:** Successfully Registered\n` +
                 `**User Key:** \`${webhookInfo.userKey}\`\n` +
                 `**Webhook URL:**\n\`\`\`${webhookInfo.webhookUrl}\`\`\`\n` +
-                `**API Key:** \`${webhookInfo.apiKey.substring(0, 25)}...\`\n` +
-                `\n⚠️ **Note:** No HMAC verification (rate-limited only)`,
+                `**API Key:** \`${webhookInfo.apiKey.substring(0, 25)}...\``,
             inline: false
         });
     } else if (webhookInfo && !webhookInfo.success) {
         embed.addFields({
-            name: "⚠️ Webhook Server Integration",
+            name: "Webhook Server Integration",
             value: 
-                `**Status:** ❌ Registration Failed\n` +
+                `**Status:** Registration Failed\n` +
                 `**Error:** ${webhookInfo.error || 'Server unreachable'}\n` +
-                `\n⚠️ User can still use license, but webhook features won't work.`,
+                `\nUser can still use license, but webhook features won't work.`,
             inline: false
         });
     }
@@ -214,9 +213,9 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, youtubeUrl, bag
     if (bagiBagiEnabled && channelInfo) {
         const rateLabel = channelInfo.koinRate === 100 ? '(Production)' : '(Test Mode)';
         embed.addFields({
-            name: "🎁 BagiBagi Integration",
+            name: "BagiBagi Integration",
             value: 
-                `**Status:** ✅ Listener Registered\n` +
+                `**Status:** Listener Registered\n` +
                 `**Channel:** <#${channelInfo.channelId}>\n` +
                 `**Exchange Rate:** 1 Koin = ${channelInfo.koinRate} IDR ${rateLabel}\n` +
                 `**Linked Key:** \`${key}\``,
@@ -225,31 +224,31 @@ function createChannelEmbed(robloxId, discordId, key, fileCount, youtubeUrl, bag
     }
 
     embed.setTimestamp();
-    embed.setFooter({ text: "License System • BLOKMARKET" });
+    embed.setFooter({ text: "License System - BLOKMARKET" });
     return embed;
 }
 
 function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled, webhookInfo) {
     const embed = new EmbedBuilder()
         .setColor("#00FF87")
-        .setTitle("🎉 YOUR BLOKMARKET LICENSE")
+        .setTitle("YOUR BLOKMARKET LICENSE")
         .setDescription(
-            `> Your Blokmarket license has been activated!\n` +
-            `> ${fileCount} file(s) are attached to this message.`
+            `Your Blokmarket license has been activated!\n` +
+            `${fileCount} file(s) are attached to this message.`
         )
         .addFields(
             { 
-                name: "📦 Your Assets", 
+                name: "Your Assets", 
                 value: `\`\`\`yaml\nScript: ${SCRIPT_ID}\n\`\`\``,
                 inline: false 
             },
             { 
-                name: "🎮 Roblox Account", 
+                name: "Roblox Account", 
                 value: `**Owner ID:** \`${robloxId}\``,
                 inline: false 
             },
             { 
-                name: "🔑 Your License Key", 
+                name: "Your License Key", 
                 value: `\`\`\`${key}\`\`\``,
                 inline: false
             }
@@ -257,7 +256,7 @@ function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled, we
 
     if (youtubeUrl) {
         embed.addFields({
-            name: "📺 Tutorial Video",
+            name: "Tutorial Video",
             value: `Watch the setup guide:\n${youtubeUrl}`,
             inline: false
         });
@@ -265,24 +264,23 @@ function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled, we
 
     if (webhookInfo && webhookInfo.success) {
         embed.addFields({
-            name: "🔗 Webhook Integration (AUTO-CONFIGURED)",
+            name: "Webhook Integration (AUTO-CONFIGURED)",
             value: 
                 `Your donation webhook is ready to use!\n\n` +
-                `**🌐 Webhook URL:**\n\`\`\`${webhookInfo.webhookUrl}\`\`\`\n` +
-                `**🔐 API Key:**\n\`\`\`${webhookInfo.apiKey}\`\`\`\n\n` +
-                `**📝 Setup Instructions:**\n` +
+                `**Webhook URL:**\n\`\`\`${webhookInfo.webhookUrl}\`\`\`\n` +
+                `**API Key:**\n\`\`\`${webhookInfo.apiKey}\`\`\`\n\n` +
+                `**Setup Instructions:**\n` +
                 `1. Go to your donation platform (Saweria/Sociabuzz/Trakteer)\n` +
                 `2. Find "Webhook" or "Callback URL" settings\n` +
                 `3. Paste the Webhook URL above\n` +
                 `4. Use the API Key for authenticated requests\n` +
                 `5. Start receiving donations!\n\n` +
-                `⚠️ **SECURITY:** This webhook has NO HMAC verification.\n` +
-                `It's protected by rate limiting only (60 req/min).`,
+                `**IMPORTANT:** Keep these credentials private - never share!`,
             inline: false
         });
     } else if (webhookInfo && !webhookInfo.success) {
         embed.addFields({
-            name: "⚠️ Webhook Integration (Setup Required)",
+            name: "Webhook Integration (Setup Required)",
             value: 
                 `Automatic webhook setup failed.\n` +
                 `**Error:** ${webhookInfo.error || 'Unknown error'}\n\n` +
@@ -298,24 +296,24 @@ function createDMEmbed(robloxId, key, fileCount, youtubeUrl, bagiBagiEnabled, we
     instructions += `${stepCounter++}. Follow setup instructions in the files\n`;
     if (webhookInfo?.success) instructions += `${stepCounter++}. Configure webhook URL in your donation platform\n`;
     instructions += `${stepCounter++}. Enjoy your Blokmarket features!\n\n`;
-    instructions += `**🔒 Keep these credentials private - never share!**`;
+    instructions += `**Keep these credentials private - never share!**`;
 
     embed.addFields({
-        name: "📋 How to Use",
+        name: "How to Use",
         value: instructions,
         inline: false
     });
 
     if (bagiBagiEnabled) {
         embed.addFields({
-            name: "🎁 BagiBagi Integration",
+            name: "BagiBagi Integration",
             value: `You're now connected to BagiBagi!\nDonations will be forwarded automatically.`,
             inline: false
         });
     }
 
     embed.setTimestamp();
-    embed.setFooter({ text: "License System • BLOKMARKET" });
+    embed.setFooter({ text: "License System - BLOKMARKET" });
     return embed;
 }
 
@@ -368,23 +366,23 @@ module.exports = {
     async execute(interaction) {
         if (!interaction.guild) {
             return await interaction.reply({
-                content: "**❌ This command can only be used in a server!**",
+                content: "This command can only be used in a server!",
                 ephemeral: true
             });
         }
 
         if (!ALLOWED_GUILDS.includes(interaction.guild.id)) {
             console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-            console.log(`[SECURITY] ⚠️ Unauthorized /genkey attempt`);
+            console.log(`[SECURITY] Unauthorized /genkey attempt`);
             console.log(`[SERVER] ${interaction.guild.name} (${interaction.guild.id})`);
             console.log(`[USER] ${interaction.user.tag} (${interaction.user.id})`);
             console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
             
             return await interaction.reply({
                 content: 
-                    "**🚫 ACCESS DENIED**\n\n" +
+                    "**ACCESS DENIED**\n\n" +
                     "This bot is **private** and not authorized for this server.\n" +
-                    "> This incident has been logged and reported.\n\n" +
+                    "This incident has been logged and reported.\n\n" +
                     "If you believe this is an error, contact the bot owner.",
                 ephemeral: true
             });
@@ -392,7 +390,7 @@ module.exports = {
 
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return await interaction.reply({
-                content: "**❌ Insufficient Permissions**\n> Required: Administrator",
+                content: "Insufficient Permissions - Required: Administrator",
                 ephemeral: true
             });
         }
@@ -407,11 +405,11 @@ module.exports = {
         if (youtubeUrl && !isValidYouTubeUrl(youtubeUrl)) {
             return await interaction.reply({
                 content: 
-                    "**❌ Invalid YouTube URL**\n\n" +
+                    "**Invalid YouTube URL**\n\n" +
                     "Please provide a valid YouTube link:\n" +
-                    "• `https://youtube.com/watch?v=xxxxx`\n" +
-                    "• `https://youtu.be/xxxxx`\n" +
-                    "• `https://youtube.com/shorts/xxxxx`",
+                    "- https://youtube.com/watch?v=xxxxx\n" +
+                    "- https://youtu.be/xxxxx\n" +
+                    "- https://youtube.com/shorts/xxxxx",
                 ephemeral: true
             });
         }
@@ -422,7 +420,7 @@ module.exports = {
             const key = generateKey();
             
             console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-            console.log(`[LICENSE] 🔑 Generating License...`);
+            console.log(`[LICENSE] Generating License...`);
             console.log(`[LICENSE] Key: ${key}`);
             console.log(`[LICENSE] User: ${discordUser.username} (${discordUser.id})`);
             console.log(`[LICENSE] Roblox ID: ${robloxId}`);
@@ -454,13 +452,13 @@ module.exports = {
                     !permissions.has(PermissionFlagsBits.ReadMessageHistory) ||
                     !permissions.has(PermissionFlagsBits.AddReactions)) {
                     
-                    console.log(`[BAGIBAGI] ⚠️ Missing permissions in ${bagiBagiChannel.name}`);
+                    console.log(`[BAGIBAGI] Missing permissions in ${bagiBagiChannel.name}`);
                     
                     await interaction.followUp({
                         content: 
-                            `**⚠️ BagiBagi Setup Incomplete**\n\n` +
+                            `**BagiBagi Setup Incomplete**\n\n` +
                             `Bot needs these permissions in <#${bagiBagiChannel.id}>:\n` +
-                            `• View Channel\n• Read Message History\n• Add Reactions\n\n` +
+                            `- View Channel\n- Read Message History\n- Add Reactions\n\n` +
                             `License was created successfully, but BagiBagi won't work.`,
                         ephemeral: true
                     });
@@ -479,13 +477,13 @@ module.exports = {
                             koinRate: koinRate
                         };
 
-                        console.log(`[BAGIBAGI] ✅ Registered`);
+                        console.log(`[BAGIBAGI] Registered`);
                         console.log(`[BAGIBAGI] Customer: ${discordUser.username}`);
                         console.log(`[BAGIBAGI] UserKey: ${webhookResult.userKey}`);
                         console.log(`[BAGIBAGI] Channel: ${bagiBagiChannel.name}`);
                         console.log(`[BAGIBAGI] Rate: 1 Koin = ${koinRate} IDR`);
                     } else {
-                        console.log(`[BAGIBAGI] ⚠️ Skipped (webhook registration failed)`);
+                        console.log(`[BAGIBAGI] Skipped (webhook registration failed)`);
                     }
                 }
             }
@@ -515,17 +513,17 @@ module.exports = {
                 if (attachments.length > 0) dmMessage.files = attachments;
                 await discordUser.send(dmMessage);
 
-                let replyContent = `✅ **License delivered successfully!**\n\n`;
-                replyContent += `📬 DM sent to ${discordUser}\n`;
-                replyContent += `📦 ${attachments.length} file(s) attached\n`;
-                if (youtubeUrl) replyContent += `📺 YouTube tutorial included\n`;
+                let replyContent = `License delivered successfully!\n\n`;
+                replyContent += `DM sent to ${discordUser}\n`;
+                replyContent += `${attachments.length} file(s) attached\n`;
+                if (youtubeUrl) replyContent += `YouTube tutorial included\n`;
                 if (webhookResult.success) {
-                    replyContent += `🔗 Webhook server: ✅ Registered\n`;
+                    replyContent += `Webhook server: Registered\n`;
                 } else {
-                    replyContent += `⚠️ Webhook server: ❌ Failed (${webhookResult.error})\n`;
+                    replyContent += `Webhook server: Failed (${webhookResult.error})\n`;
                 }
                 if (bagiBagiRegistered) {
-                    replyContent += `🎁 BagiBagi: ✅ Listening on <#${bagiBagiChannel.id}>`;
+                    replyContent += `BagiBagi: Listening on <#${bagiBagiChannel.id}>`;
                 }
 
                 await interaction.editReply({ 
@@ -533,16 +531,16 @@ module.exports = {
                     content: replyContent
                 });
 
-                console.log(`[DM] ✅ Sent to ${discordUser.tag}`);
+                console.log(`[DM] Sent to ${discordUser.tag}`);
                 console.log(`[FILES] ${attachments.length} attachment(s)`);
                 if (youtubeUrl) console.log(`[YOUTUBE] ${youtubeUrl}`);
                 console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
 
             } catch (dmError) {
-                console.error("[DM] ❌ Failed:", dmError.message);
+                console.error("[DM] Failed:", dmError.message);
                 
                 let errorContent = 
-                    `**⚠️ License created but DM failed!**\n\n` +
+                    `**License created but DM failed!**\n\n` +
                     `${discordUser} has DMs disabled or blocked the bot.\n\n` +
                     `**Manual delivery required:**\n` +
                     `\`\`\`${key}\`\`\``;
@@ -566,7 +564,7 @@ module.exports = {
             console.error("[ERROR] License generation failed:", err);
             console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
             
-            const errorMsg = `**❌ Failed to generate license**\n\`\`\`${err.message}\`\`\``;
+            const errorMsg = `**Failed to generate license**\n\`\`\`${err.message}\`\`\``;
             
             if (interaction.deferred) {
                 await interaction.editReply({ content: errorMsg });
