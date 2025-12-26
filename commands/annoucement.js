@@ -19,6 +19,12 @@ module.exports = {
                 .setDescription('Channel to send announcement')
                 .setRequired(true)
         )
+        .addStringOption(option =>
+            option
+                .setName('url')
+                .setDescription('URL/Link to include (optional)')
+                .setRequired(false)
+        )
         .addAttachmentOption(option =>
             option
                 .setName('image')
@@ -58,6 +64,7 @@ module.exports = {
 
         const message = interaction.options.getString('message');
         const targetChannel = interaction.options.getChannel('channel');
+        const urlLink = interaction.options.getString('url');
         const imageFile = interaction.options.getAttachment('image');
         const pingRole = interaction.options.getRole('ping');
 
@@ -75,6 +82,17 @@ module.exports = {
         }
 
         try {
+            // Validate URL if provided
+            if (urlLink) {
+                try {
+                    new URL(urlLink);
+                } catch (e) {
+                    return await interaction.editReply({
+                        content: "**Invalid URL!**\n> Please provide a valid URL (must start with http:// or https://)"
+                    });
+                }
+            }
+
             // Validate image file if provided
             if (imageFile && !imageFile.contentType?.startsWith('image/')) {
                 return await interaction.editReply({
@@ -98,6 +116,9 @@ module.exports = {
                 content += `${pingRole}\n\n`;
             }
             content += message;
+            if (urlLink) {
+                content += `\n\n🔗 **Link:** ${urlLink}`;
+            }
 
             // Send announcement
             await targetChannel.send({
