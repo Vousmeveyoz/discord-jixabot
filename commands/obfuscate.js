@@ -15,224 +15,10 @@ const PROMETHEUS_CONFIG = {
     // Maximum file size (in bytes) - 500KB default
     MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE) || 512000,
     // Timeout for obfuscation process (ms)
-    TIMEOUT: parseInt(process.env.OBFUSCATE_TIMEOUT) || 60000
-};
-
-// Detailed Prometheus Configurations based on documentation
-const PROMETHEUS_PRESETS = {
-    weak: {
-        LuaVersion: "Lua51",
-        VarNamePrefix: "",
-        NameGenerator: "MangledShuffled",
-        PrettyPrint: false,
-        Seed: 0,
-        Steps: [
-            {
-                Name: "WrapInFunction",
-                Settings: {
-                    Iterations: 1
-                }
-            }
-        ]
-    },
-    medium: {
-        LuaVersion: "Lua51",
-        VarNamePrefix: "",
-        NameGenerator: "MangledShuffled",
-        PrettyPrint: false,
-        Seed: 0,
-        Steps: [
-            {
-                Name: "SplitStrings",
-                Settings: {
-                    Treshold: 0.8,
-                    MinLength: 2,
-                    MaxLength: 5,
-                    ConcatenationType: "table",
-                    CustomFunctionType: "local",
-                    CustomLocalFunctionsCount: 2
-                }
-            },
-            {
-                Name: "ConstantArray",
-                Settings: {
-                    StringsOnly: true,
-                    Treshold: 1,
-                    Shuffle: true,
-                    Rotate: true,
-                    LocalWrapperTreshold: 0.5,
-                    LocalWrapperCount: 2,
-                    LocalWrapperArgCount: 3,
-                    MaxWrapperOffset: 50000
-                }
-            },
-            {
-                Name: "WrapInFunction",
-                Settings: {
-                    Iterations: 1
-                }
-            }
-        ]
-    },
-    strong: {
-        LuaVersion: "Lua51",
-        VarNamePrefix: "",
-        NameGenerator: "Il",
-        PrettyPrint: false,
-        Seed: 0,
-        Steps: [
-            {
-                Name: "EncryptStrings",
-                Settings: {}
-            },
-            {
-                Name: "ProxifyLocals",
-                Settings: {
-                    LiteralType: "any"
-                }
-            },
-            {
-                Name: "SplitStrings",
-                Settings: {
-                    Treshold: 1,
-                    MinLength: 1,
-                    MaxLength: 3,
-                    ConcatenationType: "custom",
-                    CustomFunctionType: "local",
-                    CustomLocalFunctionsCount: 3
-                }
-            },
-            {
-                Name: "ConstantArray",
-                Settings: {
-                    StringsOnly: false,
-                    Treshold: 1,
-                    Shuffle: true,
-                    Rotate: true,
-                    LocalWrapperTreshold: 0.8,
-                    LocalWrapperCount: 3,
-                    LocalWrapperArgCount: 5,
-                    MaxWrapperOffset: 100000
-                }
-            },
-            {
-                Name: "WrapInFunction",
-                Settings: {
-                    Iterations: 2
-                }
-            }
-        ]
-    },
-    minify: {
-        LuaVersion: "Lua51",
-        VarNamePrefix: "",
-        NameGenerator: "MangledShuffled",
-        PrettyPrint: false,
-        Seed: 0,
-        Steps: []
-    },
-    luau_weak: {
-        LuaVersion: "LuaU",
-        VarNamePrefix: "",
-        NameGenerator: "MangledShuffled",
-        PrettyPrint: false,
-        Seed: 0,
-        Steps: [
-            {
-                Name: "WrapInFunction",
-                Settings: {
-                    Iterations: 1
-                }
-            }
-        ]
-    },
-    luau_medium: {
-        LuaVersion: "LuaU",
-        VarNamePrefix: "",
-        NameGenerator: "MangledShuffled",
-        PrettyPrint: false,
-        Seed: 0,
-        Steps: [
-            {
-                Name: "SplitStrings",
-                Settings: {
-                    Treshold: 0.8,
-                    MinLength: 2,
-                    MaxLength: 5,
-                    ConcatenationType: "table",
-                    CustomFunctionType: "local",
-                    CustomLocalFunctionsCount: 2
-                }
-            },
-            {
-                Name: "ConstantArray",
-                Settings: {
-                    StringsOnly: true,
-                    Treshold: 1,
-                    Shuffle: true,
-                    Rotate: true,
-                    LocalWrapperTreshold: 0.5,
-                    LocalWrapperCount: 2,
-                    LocalWrapperArgCount: 3,
-                    MaxWrapperOffset: 50000
-                }
-            },
-            {
-                Name: "WrapInFunction",
-                Settings: {
-                    Iterations: 1
-                }
-            }
-        ]
-    },
-    luau_strong: {
-        LuaVersion: "LuaU",
-        VarNamePrefix: "",
-        NameGenerator: "Il",
-        PrettyPrint: false,
-        Seed: 0,
-        Steps: [
-            {
-                Name: "EncryptStrings",
-                Settings: {}
-            },
-            {
-                Name: "ProxifyLocals",
-                Settings: {
-                    LiteralType: "any"
-                }
-            },
-            {
-                Name: "SplitStrings",
-                Settings: {
-                    Treshold: 1,
-                    MinLength: 1,
-                    MaxLength: 3,
-                    ConcatenationType: "custom",
-                    CustomFunctionType: "local",
-                    CustomLocalFunctionsCount: 3
-                }
-            },
-            {
-                Name: "ConstantArray",
-                Settings: {
-                    StringsOnly: false,
-                    Treshold: 1,
-                    Shuffle: true,
-                    Rotate: true,
-                    LocalWrapperTreshold: 0.8,
-                    LocalWrapperCount: 3,
-                    LocalWrapperArgCount: 5,
-                    MaxWrapperOffset: 100000
-                }
-            },
-            {
-                Name: "WrapInFunction",
-                Settings: {
-                    Iterations: 2
-                }
-            }
-        ]
+    TIMEOUT: parseInt(process.env.OBFUSCATE_TIMEOUT) || 60000,
+    // Watermark settings
+    WATERMARK: {
+        url: 'https://blokmarket.store/'
     }
 };
 
@@ -269,6 +55,151 @@ function configToLuaTable(config, indent = 0) {
     });
     
     return `{\n${entries.join(';\n')}\n${spaces}}`;
+}
+
+/**
+ * Generate watermark header for obfuscated code
+ */
+function generateWatermark() {
+    return `--[[ ${PROMETHEUS_CONFIG.WATERMARK.url} ]]\n\n`;
+}
+
+/**
+ * Validate Lua code for common issues
+ */
+function validateLuaCode(code) {
+    const warnings = [];
+    
+    // Check for malformed numbers
+    const malformedHex = code.match(/0x[^0-9A-Fa-f\s;,)\]}\n]/g);
+    if (malformedHex) {
+        warnings.push('Detected potential malformed hexadecimal numbers');
+    }
+    
+    // Check for invalid scientific notation
+    const invalidScientific = code.match(/\d+\.?\d*[eE][+-]?[^\d]/g);
+    if (invalidScientific) {
+        warnings.push('Detected potential malformed scientific notation');
+    }
+    
+    // Check for division by zero
+    const divByZero = code.match(/\/\s*0\s*[^.0-9]/g);
+    if (divByZero) {
+        warnings.push('Detected potential division by zero');
+    }
+    
+    // Check for very long numbers (might cause precision issues)
+    const longNumbers = code.match(/\b\d{16,}\b/g);
+    if (longNumbers && longNumbers.length > 0) {
+        warnings.push('Detected very large numbers that might lose precision');
+    }
+    
+    // Check for Unicode characters
+    const hasUnicode = /[^\x00-\x7F]/.test(code);
+    if (hasUnicode) {
+        warnings.push('Detected non-ASCII characters (may cause issues in Roblox)');
+    }
+    
+    // Check for empty statements
+    const emptyStatements = code.match(/;{2,}/g);
+    if (emptyStatements) {
+        warnings.push('Detected multiple consecutive semicolons');
+    }
+    
+    return warnings;
+}
+
+/**
+ * Fix common Roblox/LuaU compatibility issues in obfuscated code
+ */
+function fixRobloxCompatibility(code) {
+    let fixed = code;
+    
+    // 1. Fix malformed hexadecimal numbers
+    // Replace 0x followed by invalid hex (common Prometheus issue)
+    // Example: 0xGGGG or incomplete hex
+    fixed = fixed.replace(/0x([0-9A-Fa-f]*[G-Zg-z][0-9A-Za-z]*)/g, (match, invalidHex) => {
+        // Convert to decimal if possible, otherwise remove
+        return '0';
+    });
+    
+    // 2. Fix scientific notation edge cases
+    // Ensure proper formatting: 1e5, 1.5e-3, etc.
+    fixed = fixed.replace(/(\d+\.?\d*)[eE]([+-]?\d+)/g, (match, base, exp) => {
+        try {
+            const num = parseFloat(match);
+            if (!isNaN(num) && isFinite(num)) {
+                return num.toString();
+            }
+        } catch (e) {
+            // Ignore
+        }
+        return match;
+    });
+    
+    // 3. Fix binary literals (not supported in Lua 5.1 or older LuaU)
+    // 0b10101 => decimal equivalent
+    fixed = fixed.replace(/0b([01]+)/g, (match, binary) => {
+        return parseInt(binary, 2).toString();
+    });
+    
+    // 4. Fix octal literals (can cause issues)
+    // 0o777 => decimal equivalent
+    fixed = fixed.replace(/0o([0-7]+)/g, (match, octal) => {
+        return parseInt(octal, 8).toString();
+    });
+    
+    // 5. Fix number literal edge cases
+    // Remove leading zeros from decimals (except for 0.x)
+    fixed = fixed.replace(/\b0+(\d+)/g, '$1');
+    fixed = fixed.replace(/\b0+(0\.\d+)/g, '$1');
+    
+    // 6. Fix very large numbers that might overflow
+    // Convert to scientific notation if too large
+    fixed = fixed.replace(/\b(\d{16,})\b/g, (match) => {
+        try {
+            const num = BigInt(match);
+            if (num > BigInt(Number.MAX_SAFE_INTEGER)) {
+                return Number(match).toExponential();
+            }
+        } catch (e) {
+            // Ignore
+        }
+        return match;
+    });
+    
+    // 7. Fix concatenation with numbers that might be ambiguous
+    // Ensure spaces around number operations
+    fixed = fixed.replace(/(\d)\.\.(\d)/g, '$1 .. $2');
+    
+    // 8. Fix hexadecimal that's too long (Lua has limits)
+    fixed = fixed.replace(/0x([0-9A-Fa-f]{17,})/g, (match, hex) => {
+        // Convert to decimal if possible
+        try {
+            return parseInt(hex, 16).toString();
+        } catch (e) {
+            return '0';
+        }
+    });
+    
+    // 9. Remove any Unicode characters that might cause issues
+    // Roblox can be sensitive to certain characters
+    fixed = fixed.replace(/[^\x00-\x7F]/g, '');
+    
+    // 10. Fix division by zero edge cases
+    fixed = fixed.replace(/\/\s*0\s*([^.0-9]|$)/g, '/ 1$1');
+    
+    // 11. Ensure all numbers are valid Lua numbers
+    // Find standalone numbers and validate them
+    fixed = fixed.replace(/\b(\d+\.?\d*(?:[eE][+-]?\d+)?)\b/g, (match) => {
+        const num = parseFloat(match);
+        if (isNaN(num) || !isFinite(num)) {
+            return '0';
+        }
+        return match;
+    });
+    
+    return fixed;
 }
 
 /**
@@ -315,39 +246,14 @@ module.exports = {
         )
         .addStringOption(option =>
             option
-                .setName('preset')
-                .setDescription('Obfuscation strength preset')
-                .setRequired(false)
-                .addChoices(
-                    { name: '🟢 Weak - Fast, light obfuscation', value: 'weak' },
-                    { name: '🟡 Medium - Balanced obfuscation', value: 'medium' },
-                    { name: '🔴 Strong - Maximum protection (slower)', value: 'strong' },
-                    { name: '📦 Minify - Only minification', value: 'minify' }
-                )
-        )
-        .addStringOption(option =>
-            option
                 .setName('output_name')
                 .setDescription('Custom output filename (without extension)')
                 .setRequired(false)
-        )
-        .addStringOption(option =>
-            option
-                .setName('lua_version')
-                .setDescription('Lua version (auto-detect by default)')
-                .setRequired(false)
-                .addChoices(
-                    { name: 'Auto-detect', value: 'auto' },
-                    { name: 'Lua 5.1 (Standard Lua)', value: 'lua51' },
-                    { name: 'Luau (Roblox)', value: 'luau' }
-                )
         ),
 
     async execute(interaction) {
         const attachment = interaction.options.getAttachment('file');
-        const presetChoice = interaction.options.getString('preset') || 'strong';
         const customOutputName = interaction.options.getString('output_name');
-        const luaVersionChoice = interaction.options.getString('lua_version') || 'auto';
 
         // Validate file extension
         if (!attachment.name.endsWith('.lua')) {
@@ -386,58 +292,10 @@ module.exports = {
                 throw new Error('File is empty');
             }
 
-            // Detect Lua version if auto
-            let isLuau = false;
-            let shouldConvert = false;
-            
-            if (luaVersionChoice === 'auto') {
-                // Auto-detect based on code patterns
-                const luauPatterns = [
-                    /\+=|-=|\*=|\/=|%=|\^=|\.\.=/,  // Compound assignments
-                    /\bcontinue\b/,                  // continue keyword
-                    /:\s*\w+\s*[=,\)]/,              // Type annotations
-                    /^type\s+\w+\s*=/m,              // Type declarations
-                    /`[^`]*\{[^}]+\}[^`]*`/          // String interpolation
-                ];
-                isLuau = luauPatterns.some(pattern => pattern.test(code));
-                shouldConvert = isLuau; // If detected as Luau, convert to Lua51
-            } else if (luaVersionChoice === 'luau') {
-                isLuau = true;
-                shouldConvert = false; // Use LuaU preset
-            } else {
-                isLuau = false;
-                shouldConvert = false; // Use Lua51 preset
-            }
-
-            // Convert Luau syntax to Lua 5.1 if needed
-            let wasConverted = false;
-            if (shouldConvert) {
-                const originalCode = code;
-                code = convertLuauToLua51(code);
-                wasConverted = (code !== originalCode);
-            }
-
-            // Select the appropriate preset
-            let preset = presetChoice;
-            if (isLuau && !shouldConvert) {
-                // Use LuaU version of presets
-                preset = `luau_${presetChoice}`;
-            }
-
-            // Get configuration
-            const config = PROMETHEUS_PRESETS[preset];
-            if (!config) {
-                throw new Error(`Invalid preset: ${preset}`);
-            }
-
-            // Generate random seed for this obfuscation
-            config.Seed = Math.floor(Math.random() * 1000000);
-
             // Save input file
             fs.writeFileSync(inputPath, code, 'utf8');
 
-            // Create wrapper script to use Prometheus with config
-            const configLua = configToLuaTable(config);
+            // Create wrapper script to use Prometheus presets
             const wrapperScript = `
 -- Prometheus Obfuscation Wrapper
 package.path = "./?.lua;./prometheus/?.lua;" .. package.path
@@ -460,11 +318,8 @@ end
 local code = inputFile:read("*all")
 inputFile:close()
 
--- Configuration
-local config = ${configLua}
-
--- Create pipeline from config
-local pipeline = Prometheus.Pipeline:fromConfig(config)
+-- Use Strong preset from Prometheus
+local pipeline = Prometheus.Pipeline:fromConfig(Prometheus.Presets.Strong)
 
 -- Apply obfuscation
 local success, result = pcall(function()
@@ -529,7 +384,14 @@ print("SUCCESS")
                 throw new Error('Output file was not created');
             }
 
-            const obfuscatedCode = fs.readFileSync(outputPath, 'utf8');
+            let obfuscatedCode = fs.readFileSync(outputPath, 'utf8');
+            
+            // Post-process to fix common Roblox compatibility issues
+            obfuscatedCode = fixRobloxCompatibility(obfuscatedCode);
+            
+            // Add watermark
+            const watermark = generateWatermark();
+            obfuscatedCode = watermark + obfuscatedCode;
             
             // Prepare output filename
             const originalName = path.basename(attachment.name, '.lua');
@@ -552,24 +414,11 @@ print("SUCCESS")
                 `✅ **Obfuscation Complete!**`,
                 ``,
                 `📄 **File:** \`${attachment.name}\``,
-                `🔒 **Preset:** ${getPresetEmoji(presetChoice)} ${capitalizeFirst(presetChoice)}`,
-                `🔧 **Version:** ${config.LuaVersion}`,
-                `🎲 **Seed:** ${config.Seed}`,
-                `📊 **Steps:** ${config.Steps.length}`,
                 `⏱️ **Duration:** ${(result.duration / 1000).toFixed(2)}s`,
-                `📈 **Size:** ${formatBytes(originalSize)} → ${formatBytes(obfuscatedSize)} (${sizeChangeStr})`
+                `📈 **Size:** ${formatBytes(originalSize)} → ${formatBytes(obfuscatedSize)} (${sizeChangeStr})`,
+                ``,
+                `*Powered by Prometheus Lua Obfuscator*`
             ];
-
-            if (wasConverted) {
-                responseLines.push(`🔄 **Auto-converted:** Luau → Lua 5.1`);
-            }
-
-            if (config.Steps.length > 0) {
-                const stepNames = config.Steps.map(s => s.Name).join(', ');
-                responseLines.push(`🛠️ **Steps Applied:** ${stepNames}`);
-            }
-
-            responseLines.push(``, `*Powered by Prometheus Lua Obfuscator*`);
 
             // Send response
             await interaction.editReply({
@@ -577,7 +426,7 @@ print("SUCCESS")
                 files: [fileAttachment]
             });
 
-            console.log(`[OBFUSCATE] Success | User: ${interaction.user.tag} | File: ${attachment.name} | Preset: ${preset} | Duration: ${result.duration}ms | Steps: ${config.Steps.length} | Converted: ${wasConverted}`);
+            console.log(`[OBFUSCATE] Success | User: ${interaction.user.tag} | File: ${attachment.name} | Duration: ${result.duration}ms`);
 
         } catch (error) {
             console.error(`[OBFUSCATE] Error | User: ${interaction.user.tag} | File: ${attachment.name}:`, error);
@@ -626,18 +475,4 @@ function formatBytes(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-}
-
-function getPresetEmoji(preset) {
-    const emojis = {
-        weak: '🟢',
-        medium: '🟡',
-        strong: '🔴',
-        minify: '📦'
-    };
-    return emojis[preset] || '⚪';
-}
-
-function capitalizeFirst(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
 }
