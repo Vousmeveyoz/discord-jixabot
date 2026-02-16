@@ -172,23 +172,68 @@ module.exports = {
             // Save input file
             fs.writeFileSync(inputPath, code, 'utf8');
 
+            // Create custom config file for Roblox-safe obfuscation
+            const configPath = path.join(PROMETHEUS_CONFIG.TEMP_DIR, `config_${sessionId}.lua`);
+            const configContent = `
+return {
+    LuaVersion = "${luaVersion}";
+    VarNamePrefix = "";
+    NameGenerator = "MangledShuffled";
+    PrettyPrint = false;
+    Seed = ${Math.floor(Math.random() * 1000000)};
+    Steps = {
+        {
+            Name = "SplitStrings";
+            Settings = {
+                Treshold = 0.7;
+                MinLength = 2;
+                MaxLength = 5;
+                ConcatenationType = "strcat";
+            }
+        };
+        {
+            Name = "ConstantArray";
+            Settings = {
+                StringsOnly = true;
+                Treshold = 1;
+                Shuffle = true;
+                Rotate = false;
+                LocalWrapperTreshold = 0.3;
+                LocalWrapperCount = 1;
+                LocalWrapperArgCount = 2;
+                MaxWrapperOffset = 1000;
+            }
+        };
+        {
+            Name = "WrapInFunction";
+            Settings = {
+                Iterations = 1;
+            }
+        };
+    }
+}
+`;
+            fs.writeFileSync(configPath, configContent, 'utf8');
+
             // Execute Prometheus CLI
             // IMPORTANT: Prometheus CLI needs relative path from its working directory
             // We're running from prometheus dir, so we need to calculate relative path
             const relativeInputPath = path.relative(PROMETHEUS_CONFIG.PROMETHEUS_PATH, inputPath);
+            const relativeConfigPath = path.relative(PROMETHEUS_CONFIG.PROMETHEUS_PATH, configPath);
             
             console.log(`[OBFUSCATE] Input path (absolute): ${inputPath}`);
             console.log(`[OBFUSCATE] Input path (relative): ${relativeInputPath}`);
+            console.log(`[OBFUSCATE] Config path (relative): ${relativeConfigPath}`);
             
             const result = await new Promise((resolve, reject) => {
                 const startTime = Date.now();
                 
-                // Build args: cli.lua --preset Medium --nocolors ../temp/input_xxx.lua
+                // Build args: cli.lua --config ../temp/config_xxx.lua --nocolors ../temp/input_xxx.lua
                 const args = [
-                    'cli.lua',  // Use relative path since we're in prometheus dir
-                    '--preset', 'Medium',
+                    'cli.lua',
+                    '--config', relativeConfigPath,
                     '--nocolors',
-                    relativeInputPath  // Use relative path!
+                    relativeInputPath
                 ];
                 
                 const commandStr = `${PROMETHEUS_CONFIG.LUA_PATH} ${args.join(' ')}`;
@@ -279,11 +324,11 @@ module.exports = {
                 ``,
                 `📄 **File:** \`${attachment.name}\``,
                 `🔧 **Lua Version:** ${luaVersion}`,
-                `🎯 **Preset:** Medium`,
+                `🎯 **Preset:** Roblox-Safe (Custom)`,
                 `⏱️ **Duration:** ${(result.duration / 1000).toFixed(2)}s`,
                 `📈 **Size:** ${formatBytes(originalSize)} → ${formatBytes(obfuscatedSize)} (${sizeChangeStr})`,
                 ``,
-                `*Powered by Prometheus Lua Obfuscator*`
+                `*Optimized for Roblox compatibility*`
             ];
 
             // Send response
@@ -331,7 +376,8 @@ module.exports = {
         } finally {
             // Cleanup temp files
             const actualObfuscatedPath = inputPath.replace('.lua', '.obfuscated.lua');
-            [inputPath, actualObfuscatedPath].forEach(file => {
+            const configPath = path.join(PROMETHEUS_CONFIG.TEMP_DIR, `config_${sessionId}.lua`);
+            [inputPath, actualObfuscatedPath, configPath].forEach(file => {
                 try {
                     if (fs.existsSync(file)) {
                         fs.unlinkSync(file);
