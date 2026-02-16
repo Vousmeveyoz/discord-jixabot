@@ -143,7 +143,6 @@ module.exports = {
 
         const sessionId = crypto.randomBytes(8).toString('hex');
         const inputPath = path.join(PROMETHEUS_CONFIG.TEMP_DIR, `input_${sessionId}.lua`);
-        const obfuscatedPath = path.join(PROMETHEUS_CONFIG.TEMP_DIR, `input_${sessionId}.obfuscated.lua`);
 
         try {
             // Download the file
@@ -174,19 +173,28 @@ module.exports = {
             fs.writeFileSync(inputPath, code, 'utf8');
 
             // Execute Prometheus CLI
-            // Command: lua ./cli.lua --preset Medium --LuaVersion LuaU --nocolors input.lua
+            // IMPORTANT: Prometheus CLI needs relative path from its working directory
+            // We're running from prometheus dir, so we need to calculate relative path
+            const relativeInputPath = path.relative(PROMETHEUS_CONFIG.PROMETHEUS_PATH, inputPath);
+            const relativeOutputPath = path.relative(PROMETHEUS_CONFIG.PROMETHEUS_PATH, obfuscatedPath);
+            
+            console.log(`[OBFUSCATE] Input path (absolute): ${inputPath}`);
+            console.log(`[OBFUSCATE] Input path (relative): ${relativeInputPath}`);
+            
             const result = await new Promise((resolve, reject) => {
                 const startTime = Date.now();
                 
+                // Build args: cli.lua --preset Medium --nocolors ../temp/input_xxx.lua
                 const args = [
-                    path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, 'cli.lua'),
+                    'cli.lua',  // Use relative path since we're in prometheus dir
                     '--preset', 'Medium',
-                    '--LuaVersion', luaVersion,
                     '--nocolors',
-                    inputPath
+                    relativeInputPath  // Use relative path!
                 ];
                 
-                console.log(`[OBFUSCATE] Executing: ${PROMETHEUS_CONFIG.LUA_PATH} ${args.join(' ')}`);
+                const commandStr = `${PROMETHEUS_CONFIG.LUA_PATH} ${args.join(' ')}`;
+                console.log(`[OBFUSCATE] Executing: ${commandStr}`);
+                console.log(`[OBFUSCATE] Working directory: ${PROMETHEUS_CONFIG.PROMETHEUS_PATH}`);
                 
                 const proc = spawn(PROMETHEUS_CONFIG.LUA_PATH, args, {
                     timeout: PROMETHEUS_CONFIG.TIMEOUT,
@@ -216,7 +224,8 @@ module.exports = {
                         resolve({ success: true, duration, stdout });
                     } else {
                         // Check if it's just a warning/info message
-                        if (fs.existsSync(obfuscatedPath)) {
+                        const actualObfuscatedPath = inputPath.replace('.lua', '.obfuscated.lua');
+                        if (fs.existsSync(actualObfuscatedPath)) {
                             console.log('[OBFUSCATE] Output file exists despite non-zero exit code, treating as success');
                             resolve({ success: true, duration, stdout });
                         } else {
@@ -231,12 +240,19 @@ module.exports = {
                 });
             });
 
-            // Read obfuscated output (Prometheus creates .obfuscated.lua file)
-            if (!fs.existsSync(obfuscatedPath)) {
+            // Read obfuscated output
+            // Prometheus creates .obfuscated.lua in the SAME directory as input
+            // Since input is ../temp/input_xxx.lua, output will be ../temp/input_xxx.obfuscated.lua
+            const actualObfuscatedPath = inputPath.replace('.lua', '.obfuscated.lua');
+            
+            console.log(`[OBFUSCATE] Looking for output at: ${actualObfuscatedPath}`);
+            
+            if (!fs.existsSync(actualObfuscatedPath)) {
+                console.error(`[OBFUSCATE] Output file not found at: ${actualObfuscatedPath}`);
                 throw new Error('Obfuscated file was not created');
             }
 
-            let obfuscatedCode = fs.readFileSync(obfuscatedPath, 'utf8');
+            let obfuscatedCode = fs.readFileSync(actualObfuscatedPath, 'utf8');
             
             // Add watermark
             const watermark = generateWatermark();
@@ -315,10 +331,12 @@ module.exports = {
 
         } finally {
             // Cleanup temp files
-            [inputPath, obfuscatedPath].forEach(file => {
+            const actualObfuscatedPath = inputPath.replace('.lua', '.obfuscated.lua');
+            [inputPath, actualObfuscatedPath].forEach(file => {
                 try {
                     if (fs.existsSync(file)) {
                         fs.unlinkSync(file);
+                        console.log(`[OBFUSCATE] Cleaned up: ${file}`);
                     }
                 } catch (e) {
                     console.error(`[OBFUSCATE] Failed to cleanup ${file}:`, e.message);
