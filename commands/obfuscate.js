@@ -281,21 +281,26 @@ module.exports = {
 
         } catch (error) {
             console.error(`[OBFUSCATE] Error | User: ${interaction.user.tag} | File: ${attachment.name}:`, error);
+            console.error(`[OBFUSCATE] Error stack:`, error.stack);
 
             let errorMessage = 'An unexpected error occurred.';
             
-            if (error.message.includes('Failed to start Lua')) {
-                errorMessage = `Lua interpreter not found.\n\n**Current LUA_PATH:** \`${PROMETHEUS_CONFIG.LUA_PATH}\`\n\nPlease set the correct path in your .env file.`;
-            } else if (error.message.includes('cli.lua')) {
-                errorMessage = `Prometheus CLI not found.\n\n**Current PROMETHEUS_PATH:** \`${PROMETHEUS_CONFIG.PROMETHEUS_PATH}\`\n\nPlease verify Prometheus is installed correctly.`;
+            // Show actual error message for better debugging
+            if (error.message.includes('ENOENT')) {
+                errorMessage = `Command execution failed.\n\n**Error:** File or command not found\n**LUA_PATH:** \`${PROMETHEUS_CONFIG.LUA_PATH}\`\n**PROMETHEUS_PATH:** \`${PROMETHEUS_CONFIG.PROMETHEUS_PATH}\`\n\nMake sure Lua/LuaJIT is installed and accessible.`;
+            } else if (error.message.includes('Failed to start')) {
+                errorMessage = `Could not start obfuscation process.\n\n**Error:** ${error.message}\n**LUA_PATH:** \`${PROMETHEUS_CONFIG.LUA_PATH}\`\n\nMake sure Lua/LuaJIT is installed: \`${PROMETHEUS_CONFIG.LUA_PATH} -v\``;
+            } else if (error.message.includes('No input file')) {
+                errorMessage = `Prometheus error: No input file was specified.\n\nThis is a CLI argument issue. Please contact support with console logs.`;
             } else if (error.message.includes('syntax error') || error.message.includes('Parsing Error')) {
-                errorMessage = 'Your Lua code contains syntax errors. Please check your code and try again.';
+                errorMessage = `Your Lua code contains syntax errors.\n\n**Error:** ${error.message}\n\nPlease check your code and try again.`;
             } else if (error.message.includes('timeout')) {
                 errorMessage = 'Obfuscation timed out. Try using a smaller file.';
-            } else if (error.message.includes('ENOENT')) {
-                errorMessage = `File not found error.\n\n**Prometheus Path:** \`${PROMETHEUS_CONFIG.PROMETHEUS_PATH}\`\n**Lua Path:** \`${PROMETHEUS_CONFIG.LUA_PATH}\`\n\nPlease check your configuration.`;
-            } else if (error.message) {
-                errorMessage = error.message;
+            } else if (error.message.includes('Obfuscated file was not created')) {
+                errorMessage = `Obfuscation completed but output file was not created.\n\nThis might be a Prometheus error. Check console logs for details.`;
+            } else {
+                // Show actual error message
+                errorMessage = `${error.message}\n\n**Debug Info:**\n- LUA: \`${PROMETHEUS_CONFIG.LUA_PATH}\`\n- Path: \`${PROMETHEUS_CONFIG.PROMETHEUS_PATH}\`\n\nCheck console logs for more details.`;
             }
 
             await interaction.editReply({
@@ -304,7 +309,7 @@ module.exports = {
                     ``,
                     `**Error:** ${errorMessage}`,
                     ``,
-                    `*If this issue persists, please contact support.*`
+                    `*Check console logs for detailed error information.*`
                 ].join('\n')
             });
 
