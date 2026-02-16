@@ -4,19 +4,13 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// Configuration - adjust these paths according to your setup
+// Configuration
 const PROMETHEUS_CONFIG = {
-    // Path to Lua interpreter (lua, lua5.1, or luajit)
     LUA_PATH: process.env.LUA_PATH || 'lua',
-    // Path to your Prometheus installation (containing prometheus.lua)
     PROMETHEUS_PATH: process.env.PROMETHEUS_PATH || path.join(__dirname, '..', 'prometheus'),
-    // Temp directory for processing files
     TEMP_DIR: process.env.TEMP_DIR || path.join(__dirname, '..', 'temp'),
-    // Maximum file size (in bytes) - 500KB default
     MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE) || 512000,
-    // Timeout for obfuscation process (ms)
     TIMEOUT: parseInt(process.env.OBFUSCATE_TIMEOUT) || 60000,
-    // Watermark settings
     WATERMARK: {
         url: 'https://blokmarket.store/'
     }
@@ -28,230 +22,10 @@ if (!fs.existsSync(PROMETHEUS_CONFIG.TEMP_DIR)) {
 }
 
 /**
- * Convert configuration object to Lua table string
- */
-function configToLuaTable(config, indent = 0) {
-    const spaces = '    '.repeat(indent);
-    const innerSpaces = '    '.repeat(indent + 1);
-    
-    if (typeof config !== 'object' || config === null) {
-        if (typeof config === 'string') {
-            return `"${config}"`;
-        }
-        return String(config);
-    }
-    
-    if (Array.isArray(config)) {
-        if (config.length === 0) return '{}';
-        const items = config.map(item => 
-            `${innerSpaces}${configToLuaTable(item, indent + 1)}`
-        );
-        return `{\n${items.join(',\n')}\n${spaces}}`;
-    }
-    
-    const entries = Object.entries(config).map(([key, value]) => {
-        const luaValue = configToLuaTable(value, indent + 1);
-        return `${innerSpaces}${key} = ${luaValue}`;
-    });
-    
-    return `{\n${entries.join(';\n')}\n${spaces}}`;
-}
-
-/**
- * Generate watermark header for obfuscated code
+ * Generate watermark header
  */
 function generateWatermark() {
     return `--[[ ${PROMETHEUS_CONFIG.WATERMARK.url} ]]\n\n`;
-}
-
-/**
- * Validate Lua code for common issues
- */
-function validateLuaCode(code) {
-    const warnings = [];
-    
-    // Check for malformed numbers
-    const malformedHex = code.match(/0x[^0-9A-Fa-f\s;,)\]}\n]/g);
-    if (malformedHex) {
-        warnings.push('Detected potential malformed hexadecimal numbers');
-    }
-    
-    // Check for invalid scientific notation
-    const invalidScientific = code.match(/\d+\.?\d*[eE][+-]?[^\d]/g);
-    if (invalidScientific) {
-        warnings.push('Detected potential malformed scientific notation');
-    }
-    
-    // Check for division by zero
-    const divByZero = code.match(/\/\s*0\s*[^.0-9]/g);
-    if (divByZero) {
-        warnings.push('Detected potential division by zero');
-    }
-    
-    // Check for very long numbers (might cause precision issues)
-    const longNumbers = code.match(/\b\d{16,}\b/g);
-    if (longNumbers && longNumbers.length > 0) {
-        warnings.push('Detected very large numbers that might lose precision');
-    }
-    
-    // Check for Unicode characters
-    const hasUnicode = /[^\x00-\x7F]/.test(code);
-    if (hasUnicode) {
-        warnings.push('Detected non-ASCII characters (may cause issues in Roblox)');
-    }
-    
-    // Check for empty statements
-    const emptyStatements = code.match(/;{2,}/g);
-    if (emptyStatements) {
-        warnings.push('Detected multiple consecutive semicolons');
-    }
-    
-    return warnings;
-}
-
-/**
- * Fix common Roblox/LuaU compatibility issues in obfuscated code
- */
-function fixRobloxCompatibility(code) {
-    let fixed = code;
-    
-    // 1. Fix malformed hexadecimal numbers
-    // Replace 0x followed by invalid hex (common Prometheus issue)
-    fixed = fixed.replace(/0x([0-9A-Fa-f]*[G-Zg-z][0-9A-Za-z]*)/g, '0');
-    
-    // 2. Fix scientific notation edge cases
-    // Ensure proper formatting: 1e5, 1.5e-3, etc.
-    fixed = fixed.replace(/(\d+\.?\d*)[eE]([+-]?\d+)/g, (match, base, exp) => {
-        try {
-            const num = parseFloat(match);
-            if (!isNaN(num) && isFinite(num)) {
-                return num.toString();
-            }
-        } catch (e) {
-            // Ignore
-        }
-        return match;
-    });
-    
-    // 3. Fix binary literals (not supported in Lua 5.1)
-    fixed = fixed.replace(/0b([01]+)/g, (match, binary) => {
-        return parseInt(binary, 2).toString();
-    });
-    
-    // 4. Fix octal literals
-    fixed = fixed.replace(/0o([0-7]+)/g, (match, octal) => {
-        return parseInt(octal, 8).toString();
-    });
-    
-    // 5. Fix number literal edge cases
-    // Remove leading zeros from decimals (except for 0.x)
-    fixed = fixed.replace(/\b0+(\d+)/g, '$1');
-    fixed = fixed.replace(/\b0+(0\.\d+)/g, '$1');
-    
-    // 6. Fix very large numbers that might overflow
-    fixed = fixed.replace(/\b(\d{16,})\b/g, (match) => {
-        try {
-            const num = BigInt(match);
-            if (num > BigInt(Number.MAX_SAFE_INTEGER)) {
-                return Number(match).toExponential();
-            }
-        } catch (e) {
-            // Ignore
-        }
-        return match;
-    });
-    
-    // 7. Fix concatenation with numbers that might be ambiguous
-    // Ensure spaces around number operations
-    fixed = fixed.replace(/(\d)\.\.(\d)/g, '$1 .. $2');
-    
-    // 8. Fix hexadecimal that's too long
-    fixed = fixed.replace(/0x([0-9A-Fa-f]{17,})/g, (match, hex) => {
-        try {
-            return parseInt(hex, 16).toString();
-        } catch (e) {
-            return '0';
-        }
-    });
-    
-    // 9. Remove any Unicode characters that might cause issues
-    fixed = fixed.replace(/[^\x00-\x7F]/g, '');
-    
-    // 10. Fix division by zero edge cases
-    fixed = fixed.replace(/\/\s*0\s*([^.0-9]|$)/g, '/ 1$1');
-    
-    // 11. Fix varargs ellipsis issues - CRITICAL FIX for "Expected ')'" error
-    // Ensure proper spacing around ... (vararg)
-    // Fix patterns like: function(...) or (...) or {...}
-    fixed = fixed.replace(/\(\s*\.\.\.\s*\)/g, '(...)');
-    fixed = fixed.replace(/\{\s*\.\.\.\s*\}/g, '{...}');
-    fixed = fixed.replace(/,\s*\.\.\.\s*\)/g, ', ...)');
-    
-    // 12. Fix malformed function parameters with ...
-    // Pattern: (param1, param2, ...) should be properly spaced
-    fixed = fixed.replace(/,\s*\.\.\./g, ', ...');
-    
-    // 13. Ensure all numbers are valid Lua numbers
-    fixed = fixed.replace(/\b(\d+\.?\d*(?:[eE][+-]?\d+)?)\b/g, (match) => {
-        const num = parseFloat(match);
-        if (isNaN(num) || !isFinite(num)) {
-            return '0';
-        }
-        return match;
-    });
-    
-    // 14. Fix edge case where ... appears in unexpected places
-    // Make sure ... only appears in valid contexts (parameters, return, table constructors)
-    // This regex finds ... that's NOT in valid contexts and comments them out
-    const lines = fixed.split('\n');
-    fixed = lines.map(line => {
-        // Skip if line is already a comment
-        if (line.trim().startsWith('--')) return line;
-        
-        // Check for ... in invalid positions (not after function, return, or in {})
-        const invalidVararg = /(?<!function\s*\(.*?)(?<!return\s)(?<!\{)\.\.\.(?!\})/g;
-        
-        // Don't modify lines that look valid
-        if (line.includes('function') || line.includes('return') || line.includes('{...}')) {
-            return line;
-        }
-        
-        return line;
-    }).join('\n');
-    
-    return fixed;
-}
-
-/**
- * Convert Luau/Roblox Lua syntax to standard Lua 5.1
- */
-function convertLuauToLua51(code) {
-    let converted = code;
-    
-    // 1. Convert compound assignments: += -= *= /= %= ^= ..=
-    converted = converted.replace(/(\w+)\s*\+=\s*/g, '$1 = $1 + ');
-    converted = converted.replace(/(\w+)\s*-=\s*/g, '$1 = $1 - ');
-    converted = converted.replace(/(\w+)\s*\*=\s*/g, '$1 = $1 * ');
-    converted = converted.replace(/(\w+)\s*\/=\s*/g, '$1 = $1 / ');
-    converted = converted.replace(/(\w+)\s*%=\s*/g, '$1 = $1 % ');
-    converted = converted.replace(/(\w+)\s*\^=\s*/g, '$1 = $1 ^ ');
-    converted = converted.replace(/(\w+)\s*\.\.=\s*/g, '$1 = $1 .. ');
-    
-    // 2. Convert 'continue' to a goto pattern
-    converted = converted.replace(/\bcontinue\b/g, '-- continue (not supported in Lua 5.1)');
-    
-    // 3. Type annotations: Remove them
-    converted = converted.replace(/:\s*\w+(\?)?(\s*[=,\)])/g, '$2');
-    converted = converted.replace(/\)\s*:\s*\w+(\?)?(\s*[\n{])/g, ')$2');
-    
-    // 4. Remove type declarations
-    converted = converted.replace(/^type\s+\w+\s*=\s*\{[^}]*\}\s*$/gm, '-- type declaration removed');
-    converted = converted.replace(/^export\s+type\s+\w+\s*=\s*\{[^}]*\}\s*$/gm, '-- export type declaration removed');
-    
-    // 5. String interpolation: `Hello {name}` => "Hello " .. name
-    converted = converted.replace(/`([^`]*)\{([^}]+)\}([^`]*)`/g, '"$1" .. $2 .. "$3"');
-    
-    return converted;
 }
 
 module.exports = {
@@ -296,8 +70,7 @@ module.exports = {
 
         const sessionId = crypto.randomBytes(8).toString('hex');
         const inputPath = path.join(PROMETHEUS_CONFIG.TEMP_DIR, `input_${sessionId}.lua`);
-        const outputPath = path.join(PROMETHEUS_CONFIG.TEMP_DIR, `output_${sessionId}.lua`);
-        const wrapperPath = path.join(PROMETHEUS_CONFIG.TEMP_DIR, `wrapper_${sessionId}.lua`);
+        const obfuscatedPath = path.join(PROMETHEUS_CONFIG.TEMP_DIR, `input_${sessionId}.obfuscated.lua`);
 
         try {
             // Download the file
@@ -305,7 +78,7 @@ module.exports = {
             if (!response.ok) {
                 throw new Error('Failed to download file');
             }
-            let code = await response.text();
+            const code = await response.text();
 
             // Basic validation
             if (!code.trim()) {
@@ -314,12 +87,12 @@ module.exports = {
 
             // Auto-detect Lua version (LuaU vs Lua51)
             const luauPatterns = [
-                /\+=|-=|\*=|\/=|%=|\^=|\.\.=/,  // Compound assignments
-                /\bcontinue\b/,                  // continue keyword
-                /:\s*\w+[\?]?\s*[=,\)]/,         // Type annotations
-                /^type\s+\w+\s*=/m,              // Type declarations
-                /`[^`]*\{[^}]+\}[^`]*`/,         // String interpolation
-                /\bexport\s+type\b/              // Export type
+                /\+=|-=|\*=|\/=|%=|\^=|\.\.=/,
+                /\bcontinue\b/,
+                /:\s*\w+[\?]?\s*[=,\)]/,
+                /^type\s+\w+\s*=/m,
+                /`[^`]*\{[^}]+\}[^`]*`/,
+                /\bexport\s+type\b/
             ];
             const isLuaU = luauPatterns.some(pattern => pattern.test(code));
             const luaVersion = isLuaU ? "LuaU" : "Lua51";
@@ -327,64 +100,20 @@ module.exports = {
             // Save input file
             fs.writeFileSync(inputPath, code, 'utf8');
 
-            // Create wrapper script to use Prometheus presets
-            const wrapperScript = `
--- Prometheus Obfuscation Wrapper
-package.path = "./?.lua;./prometheus/?.lua;" .. package.path
-
-local success, Prometheus = pcall(require, "prometheus")
-if not success then
-    io.stderr:write("ERROR: Failed to load Prometheus: " .. tostring(Prometheus))
-    os.exit(1)
-end
-
--- Suppress console output
-Prometheus.Logger.logLevel = Prometheus.Logger.LogLevel.Error
-
--- Read input file
-local inputFile = io.open("${inputPath.replace(/\\/g, '/')}", "r")
-if not inputFile then
-    io.stderr:write("ERROR: Could not open input file")
-    os.exit(1)
-end
-local code = inputFile:read("*all")
-inputFile:close()
-
--- Use Strong preset and set Lua version
-local config = Prometheus.Presets.Strong
-config.LuaVersion = "${luaVersion}"
-
-local pipeline = Prometheus.Pipeline:fromConfig(config)
-
--- Apply obfuscation
-local success, result = pcall(function()
-    return pipeline:apply(code, "${attachment.name}")
-end)
-
-if not success then
-    io.stderr:write("ERROR: Obfuscation failed: " .. tostring(result))
-    os.exit(1)
-end
-
--- Write output
-local outputFile = io.open("${outputPath.replace(/\\/g, '/')}", "w")
-if not outputFile then
-    io.stderr:write("ERROR: Could not create output file")
-    os.exit(1)
-end
-outputFile:write(result)
-outputFile:close()
-
-print("SUCCESS")
-`;
-
-            fs.writeFileSync(wrapperPath, wrapperScript, 'utf8');
-
-            // Execute Prometheus from its directory
+            // Execute Prometheus CLI
+            // Command: lua ./cli.lua --preset Medium --LuaVersion LuaU --nocolors input.lua
             const result = await new Promise((resolve, reject) => {
                 const startTime = Date.now();
                 
-                const proc = spawn(PROMETHEUS_CONFIG.LUA_PATH, [wrapperPath], {
+                const args = [
+                    './cli.lua',
+                    '--preset', 'Medium',
+                    '--LuaVersion', luaVersion,
+                    '--nocolors',
+                    inputPath
+                ];
+                
+                const proc = spawn(PROMETHEUS_CONFIG.LUA_PATH, args, {
                     timeout: PROMETHEUS_CONFIG.TIMEOUT,
                     cwd: PROMETHEUS_CONFIG.PROMETHEUS_PATH
                 });
@@ -402,10 +131,10 @@ print("SUCCESS")
 
                 proc.on('close', (code) => {
                     const duration = Date.now() - startTime;
-                    if (code === 0 && stdout.includes('SUCCESS')) {
-                        resolve({ success: true, duration });
+                    if (code === 0) {
+                        resolve({ success: true, duration, stdout });
                     } else {
-                        reject(new Error(stderr || `Process exited with code ${code}`));
+                        reject(new Error(stderr || stdout || `Process exited with code ${code}`));
                     }
                 });
 
@@ -414,15 +143,12 @@ print("SUCCESS")
                 });
             });
 
-            // Read obfuscated output
-            if (!fs.existsSync(outputPath)) {
-                throw new Error('Output file was not created');
+            // Read obfuscated output (Prometheus creates .obfuscated.lua file)
+            if (!fs.existsSync(obfuscatedPath)) {
+                throw new Error('Obfuscated file was not created');
             }
 
-            let obfuscatedCode = fs.readFileSync(outputPath, 'utf8');
-            
-            // Post-process to fix common Roblox compatibility issues
-            obfuscatedCode = fixRobloxCompatibility(obfuscatedCode);
+            let obfuscatedCode = fs.readFileSync(obfuscatedPath, 'utf8');
             
             // Add watermark
             const watermark = generateWatermark();
@@ -450,6 +176,7 @@ print("SUCCESS")
                 ``,
                 `📄 **File:** \`${attachment.name}\``,
                 `🔧 **Lua Version:** ${luaVersion}`,
+                `🎯 **Preset:** Medium`,
                 `⏱️ **Duration:** ${(result.duration / 1000).toFixed(2)}s`,
                 `📈 **Size:** ${formatBytes(originalSize)} → ${formatBytes(obfuscatedSize)} (${sizeChangeStr})`,
                 ``,
@@ -469,14 +196,14 @@ print("SUCCESS")
 
             let errorMessage = 'An unexpected error occurred.';
             
-            if (error.message.includes('Failed to load Prometheus')) {
-                errorMessage = 'Prometheus is not properly installed. Please contact an administrator.';
-            } else if (error.message.includes('Failed to start Lua')) {
+            if (error.message.includes('Failed to start Lua')) {
                 errorMessage = 'Lua interpreter not found. Please contact an administrator.';
+            } else if (error.message.includes('cli.lua')) {
+                errorMessage = 'Prometheus CLI not found. Please contact an administrator.';
             } else if (error.message.includes('syntax error') || error.message.includes('Parsing Error')) {
-                errorMessage = 'Your Lua code contains syntax errors. Please check your code and try again.\n\n**Tip:** Some advanced Luau features may not be fully supported.';
+                errorMessage = 'Your Lua code contains syntax errors. Please check your code and try again.';
             } else if (error.message.includes('timeout')) {
-                errorMessage = 'Obfuscation timed out. Try using a weaker preset or smaller file.';
+                errorMessage = 'Obfuscation timed out. Try using a smaller file.';
             } else if (error.message) {
                 errorMessage = error.message;
             }
@@ -493,7 +220,7 @@ print("SUCCESS")
 
         } finally {
             // Cleanup temp files
-            [inputPath, outputPath, wrapperPath].forEach(file => {
+            [inputPath, obfuscatedPath].forEach(file => {
                 try {
                     if (fs.existsSync(file)) {
                         fs.unlinkSync(file);
