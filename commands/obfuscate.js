@@ -18,12 +18,222 @@ const PROMETHEUS_CONFIG = {
     TIMEOUT: parseInt(process.env.OBFUSCATE_TIMEOUT) || 60000
 };
 
-// Preset configurations
-const PRESETS = {
-    weak: 'Weak',
-    medium: 'Medium',
-    strong: 'Strong',
-    minify: 'Minify'
+// Detailed Prometheus Configurations based on documentation
+const PROMETHEUS_PRESETS = {
+    weak: {
+        LuaVersion: "Lua51",
+        VarNamePrefix: "",
+        NameGenerator: "MangledShuffled",
+        PrettyPrint: false,
+        Seed: 0,
+        Steps: [
+            {
+                Name: "WrapInFunction",
+                Settings: {
+                    Iterations: 1
+                }
+            }
+        ]
+    },
+    medium: {
+        LuaVersion: "Lua51",
+        VarNamePrefix: "",
+        NameGenerator: "MangledShuffled",
+        PrettyPrint: false,
+        Seed: 0,
+        Steps: [
+            {
+                Name: "SplitStrings",
+                Settings: {
+                    Treshold: 0.8,
+                    MinLength: 2,
+                    MaxLength: 5,
+                    ConcatenationType: "table",
+                    CustomFunctionType: "local",
+                    CustomLocalFunctionsCount: 2
+                }
+            },
+            {
+                Name: "ConstantArray",
+                Settings: {
+                    StringsOnly: true,
+                    Treshold: 1,
+                    Shuffle: true,
+                    Rotate: true,
+                    LocalWrapperTreshold: 0.5,
+                    LocalWrapperCount: 2,
+                    LocalWrapperArgCount: 3,
+                    MaxWrapperOffset: 50000
+                }
+            },
+            {
+                Name: "WrapInFunction",
+                Settings: {
+                    Iterations: 1
+                }
+            }
+        ]
+    },
+    strong: {
+        LuaVersion: "Lua51",
+        VarNamePrefix: "",
+        NameGenerator: "Il",
+        PrettyPrint: false,
+        Seed: 0,
+        Steps: [
+            {
+                Name: "EncryptStrings",
+                Settings: {}
+            },
+            {
+                Name: "ProxifyLocals",
+                Settings: {
+                    LiteralType: "any"
+                }
+            },
+            {
+                Name: "SplitStrings",
+                Settings: {
+                    Treshold: 1,
+                    MinLength: 1,
+                    MaxLength: 3,
+                    ConcatenationType: "custom",
+                    CustomFunctionType: "local",
+                    CustomLocalFunctionsCount: 3
+                }
+            },
+            {
+                Name: "ConstantArray",
+                Settings: {
+                    StringsOnly: false,
+                    Treshold: 1,
+                    Shuffle: true,
+                    Rotate: true,
+                    LocalWrapperTreshold: 0.8,
+                    LocalWrapperCount: 3,
+                    LocalWrapperArgCount: 5,
+                    MaxWrapperOffset: 100000
+                }
+            },
+            {
+                Name: "WrapInFunction",
+                Settings: {
+                    Iterations: 2
+                }
+            }
+        ]
+    },
+    minify: {
+        LuaVersion: "Lua51",
+        VarNamePrefix: "",
+        NameGenerator: "MangledShuffled",
+        PrettyPrint: false,
+        Seed: 0,
+        Steps: []
+    },
+    luau_weak: {
+        LuaVersion: "LuaU",
+        VarNamePrefix: "",
+        NameGenerator: "MangledShuffled",
+        PrettyPrint: false,
+        Seed: 0,
+        Steps: [
+            {
+                Name: "WrapInFunction",
+                Settings: {
+                    Iterations: 1
+                }
+            }
+        ]
+    },
+    luau_medium: {
+        LuaVersion: "LuaU",
+        VarNamePrefix: "",
+        NameGenerator: "MangledShuffled",
+        PrettyPrint: false,
+        Seed: 0,
+        Steps: [
+            {
+                Name: "SplitStrings",
+                Settings: {
+                    Treshold: 0.8,
+                    MinLength: 2,
+                    MaxLength: 5,
+                    ConcatenationType: "table",
+                    CustomFunctionType: "local",
+                    CustomLocalFunctionsCount: 2
+                }
+            },
+            {
+                Name: "ConstantArray",
+                Settings: {
+                    StringsOnly: true,
+                    Treshold: 1,
+                    Shuffle: true,
+                    Rotate: true,
+                    LocalWrapperTreshold: 0.5,
+                    LocalWrapperCount: 2,
+                    LocalWrapperArgCount: 3,
+                    MaxWrapperOffset: 50000
+                }
+            },
+            {
+                Name: "WrapInFunction",
+                Settings: {
+                    Iterations: 1
+                }
+            }
+        ]
+    },
+    luau_strong: {
+        LuaVersion: "LuaU",
+        VarNamePrefix: "",
+        NameGenerator: "Il",
+        PrettyPrint: false,
+        Seed: 0,
+        Steps: [
+            {
+                Name: "EncryptStrings",
+                Settings: {}
+            },
+            {
+                Name: "ProxifyLocals",
+                Settings: {
+                    LiteralType: "any"
+                }
+            },
+            {
+                Name: "SplitStrings",
+                Settings: {
+                    Treshold: 1,
+                    MinLength: 1,
+                    MaxLength: 3,
+                    ConcatenationType: "custom",
+                    CustomFunctionType: "local",
+                    CustomLocalFunctionsCount: 3
+                }
+            },
+            {
+                Name: "ConstantArray",
+                Settings: {
+                    StringsOnly: false,
+                    Treshold: 1,
+                    Shuffle: true,
+                    Rotate: true,
+                    LocalWrapperTreshold: 0.8,
+                    LocalWrapperCount: 3,
+                    LocalWrapperArgCount: 5,
+                    MaxWrapperOffset: 100000
+                }
+            },
+            {
+                Name: "WrapInFunction",
+                Settings: {
+                    Iterations: 2
+                }
+            }
+        ]
+    }
 };
 
 // Ensure temp directory exists
@@ -32,14 +242,42 @@ if (!fs.existsSync(PROMETHEUS_CONFIG.TEMP_DIR)) {
 }
 
 /**
+ * Convert configuration object to Lua table string
+ */
+function configToLuaTable(config, indent = 0) {
+    const spaces = '    '.repeat(indent);
+    const innerSpaces = '    '.repeat(indent + 1);
+    
+    if (typeof config !== 'object' || config === null) {
+        if (typeof config === 'string') {
+            return `"${config}"`;
+        }
+        return String(config);
+    }
+    
+    if (Array.isArray(config)) {
+        if (config.length === 0) return '{}';
+        const items = config.map(item => 
+            `${innerSpaces}${configToLuaTable(item, indent + 1)}`
+        );
+        return `{\n${items.join(',\n')}\n${spaces}}`;
+    }
+    
+    const entries = Object.entries(config).map(([key, value]) => {
+        const luaValue = configToLuaTable(value, indent + 1);
+        return `${innerSpaces}${key} = ${luaValue}`;
+    });
+    
+    return `{\n${entries.join(';\n')}\n${spaces}}`;
+}
+
+/**
  * Convert Luau/Roblox Lua syntax to standard Lua 5.1
- * This allows Prometheus to process Roblox scripts
  */
 function convertLuauToLua51(code) {
     let converted = code;
     
     // 1. Convert compound assignments: += -= *= /= %= ^= ..=
-    // a += b  =>  a = a + b
     converted = converted.replace(/(\w+)\s*\+=\s*/g, '$1 = $1 + ');
     converted = converted.replace(/(\w+)\s*-=\s*/g, '$1 = $1 - ');
     converted = converted.replace(/(\w+)\s*\*=\s*/g, '$1 = $1 * ');
@@ -48,27 +286,18 @@ function convertLuauToLua51(code) {
     converted = converted.replace(/(\w+)\s*\^=\s*/g, '$1 = $1 ^ ');
     converted = converted.replace(/(\w+)\s*\.\.=\s*/g, '$1 = $1 .. ');
     
-    // 2. Convert 'continue' to a goto pattern (basic support)
-    // This is a simplified conversion - complex cases may need manual fixing
-    // For now, we'll just comment it out with a note
+    // 2. Convert 'continue' to a goto pattern
     converted = converted.replace(/\bcontinue\b/g, '-- continue (not supported in Lua 5.1)');
     
     // 3. Type annotations: Remove them
-    // local x: number = 5  =>  local x = 5
-    // function foo(a: string, b: number): boolean  =>  function foo(a, b)
     converted = converted.replace(/:\s*\w+(\?)?(\s*[=,\)])/g, '$2');
     converted = converted.replace(/\)\s*:\s*\w+(\?)?(\s*[\n{])/g, ')$2');
     
     // 4. Remove type declarations
-    // type MyType = { ... }  =>  (removed)
     converted = converted.replace(/^type\s+\w+\s*=\s*\{[^}]*\}\s*$/gm, '-- type declaration removed');
     converted = converted.replace(/^export\s+type\s+\w+\s*=\s*\{[^}]*\}\s*$/gm, '-- export type declaration removed');
     
-    // 5. Convert if-then expressions (ternary-like) - basic support
-    // This is complex, so we'll leave it for now
-    
-    // 6. String interpolation: `Hello {name}` => "Hello " .. name
-    // Basic support - complex cases may need manual fixing
+    // 5. String interpolation: `Hello {name}` => "Hello " .. name
     converted = converted.replace(/`([^`]*)\{([^}]+)\}([^`]*)`/g, '"$1" .. $2 .. "$3"');
     
     return converted;
@@ -102,18 +331,23 @@ module.exports = {
                 .setDescription('Custom output filename (without extension)')
                 .setRequired(false)
         )
-        .addBooleanOption(option =>
+        .addStringOption(option =>
             option
-                .setName('luau_convert')
-                .setDescription('Auto-convert Luau/Roblox syntax to Lua 5.1 (default: true)')
+                .setName('lua_version')
+                .setDescription('Lua version (auto-detect by default)')
                 .setRequired(false)
+                .addChoices(
+                    { name: 'Auto-detect', value: 'auto' },
+                    { name: 'Lua 5.1 (Standard Lua)', value: 'lua51' },
+                    { name: 'Luau (Roblox)', value: 'luau' }
+                )
         ),
 
     async execute(interaction) {
         const attachment = interaction.options.getAttachment('file');
-        const preset = interaction.options.getString('preset') || 'strong';
+        const presetChoice = interaction.options.getString('preset') || 'strong';
         const customOutputName = interaction.options.getString('output_name');
-        const luauConvert = interaction.options.getBoolean('luau_convert') ?? true;
+        const luaVersionChoice = interaction.options.getString('lua_version') || 'auto';
 
         // Validate file extension
         if (!attachment.name.endsWith('.lua')) {
@@ -152,18 +386,58 @@ module.exports = {
                 throw new Error('File is empty');
             }
 
-            // Convert Luau syntax to Lua 5.1 if enabled
+            // Detect Lua version if auto
+            let isLuau = false;
+            let shouldConvert = false;
+            
+            if (luaVersionChoice === 'auto') {
+                // Auto-detect based on code patterns
+                const luauPatterns = [
+                    /\+=|-=|\*=|\/=|%=|\^=|\.\.=/,  // Compound assignments
+                    /\bcontinue\b/,                  // continue keyword
+                    /:\s*\w+\s*[=,\)]/,              // Type annotations
+                    /^type\s+\w+\s*=/m,              // Type declarations
+                    /`[^`]*\{[^}]+\}[^`]*`/          // String interpolation
+                ];
+                isLuau = luauPatterns.some(pattern => pattern.test(code));
+                shouldConvert = isLuau; // If detected as Luau, convert to Lua51
+            } else if (luaVersionChoice === 'luau') {
+                isLuau = true;
+                shouldConvert = false; // Use LuaU preset
+            } else {
+                isLuau = false;
+                shouldConvert = false; // Use Lua51 preset
+            }
+
+            // Convert Luau syntax to Lua 5.1 if needed
             let wasConverted = false;
-            if (luauConvert) {
+            if (shouldConvert) {
                 const originalCode = code;
                 code = convertLuauToLua51(code);
                 wasConverted = (code !== originalCode);
             }
 
+            // Select the appropriate preset
+            let preset = presetChoice;
+            if (isLuau && !shouldConvert) {
+                // Use LuaU version of presets
+                preset = `luau_${presetChoice}`;
+            }
+
+            // Get configuration
+            const config = PROMETHEUS_PRESETS[preset];
+            if (!config) {
+                throw new Error(`Invalid preset: ${preset}`);
+            }
+
+            // Generate random seed for this obfuscation
+            config.Seed = Math.floor(Math.random() * 1000000);
+
             // Save input file
             fs.writeFileSync(inputPath, code, 'utf8');
 
-            // Create wrapper script to use Prometheus as library
+            // Create wrapper script to use Prometheus with config
+            const configLua = configToLuaTable(config);
             const wrapperScript = `
 -- Prometheus Obfuscation Wrapper
 package.path = "./?.lua;./prometheus/?.lua;" .. package.path
@@ -186,19 +460,15 @@ end
 local code = inputFile:read("*all")
 inputFile:close()
 
--- Create pipeline with selected preset
-local presetName = "${PRESETS[preset]}"
-local presetConfig = Prometheus.Presets[presetName]
-if not presetConfig then
-    io.stderr:write("ERROR: Invalid preset: " .. presetName)
-    os.exit(1)
-end
+-- Configuration
+local config = ${configLua}
 
-local pipeline = Prometheus.Pipeline:fromConfig(presetConfig)
+-- Create pipeline from config
+local pipeline = Prometheus.Pipeline:fromConfig(config)
 
 -- Apply obfuscation
 local success, result = pcall(function()
-    return pipeline:apply(code)
+    return pipeline:apply(code, "${attachment.name}")
 end)
 
 if not success then
@@ -226,7 +496,7 @@ print("SUCCESS")
                 
                 const proc = spawn(PROMETHEUS_CONFIG.LUA_PATH, [wrapperPath], {
                     timeout: PROMETHEUS_CONFIG.TIMEOUT,
-                    cwd: PROMETHEUS_CONFIG.PROMETHEUS_PATH  // Run from Prometheus directory
+                    cwd: PROMETHEUS_CONFIG.PROMETHEUS_PATH
                 });
 
                 let stdout = '';
@@ -282,13 +552,21 @@ print("SUCCESS")
                 `✅ **Obfuscation Complete!**`,
                 ``,
                 `📄 **File:** \`${attachment.name}\``,
-                `🔒 **Preset:** ${getPresetEmoji(preset)} ${PRESETS[preset]}`,
+                `🔒 **Preset:** ${getPresetEmoji(presetChoice)} ${capitalizeFirst(presetChoice)}`,
+                `🔧 **Version:** ${config.LuaVersion}`,
+                `🎲 **Seed:** ${config.Seed}`,
+                `📊 **Steps:** ${config.Steps.length}`,
                 `⏱️ **Duration:** ${(result.duration / 1000).toFixed(2)}s`,
-                `📊 **Size:** ${formatBytes(originalSize)} → ${formatBytes(obfuscatedSize)} (${sizeChangeStr})`
+                `📈 **Size:** ${formatBytes(originalSize)} → ${formatBytes(obfuscatedSize)} (${sizeChangeStr})`
             ];
 
             if (wasConverted) {
-                responseLines.push(`🔄 **Luau → Lua 5.1:** Auto-converted`);
+                responseLines.push(`🔄 **Auto-converted:** Luau → Lua 5.1`);
+            }
+
+            if (config.Steps.length > 0) {
+                const stepNames = config.Steps.map(s => s.Name).join(', ');
+                responseLines.push(`🛠️ **Steps Applied:** ${stepNames}`);
             }
 
             responseLines.push(``, `*Powered by Prometheus Lua Obfuscator*`);
@@ -299,7 +577,7 @@ print("SUCCESS")
                 files: [fileAttachment]
             });
 
-            console.log(`[OBFUSCATE] Success | User: ${interaction.user.tag} | File: ${attachment.name} | Preset: ${preset} | Duration: ${result.duration}ms | Luau Convert: ${wasConverted}`);
+            console.log(`[OBFUSCATE] Success | User: ${interaction.user.tag} | File: ${attachment.name} | Preset: ${preset} | Duration: ${result.duration}ms | Steps: ${config.Steps.length} | Converted: ${wasConverted}`);
 
         } catch (error) {
             console.error(`[OBFUSCATE] Error | User: ${interaction.user.tag} | File: ${attachment.name}:`, error);
@@ -311,7 +589,7 @@ print("SUCCESS")
             } else if (error.message.includes('Failed to start Lua')) {
                 errorMessage = 'Lua interpreter not found. Please contact an administrator.';
             } else if (error.message.includes('syntax error') || error.message.includes('Parsing Error')) {
-                errorMessage = 'Your Lua code contains syntax errors that could not be auto-fixed. Please check your code and try again.\n\n**Tip:** Some advanced Luau features may not be supported.';
+                errorMessage = 'Your Lua code contains syntax errors. Please check your code and try again.\n\n**Tip:** Some advanced Luau features may not be fully supported.';
             } else if (error.message.includes('timeout')) {
                 errorMessage = 'Obfuscation timed out. Try using a weaker preset or smaller file.';
             } else if (error.message) {
@@ -358,4 +636,8 @@ function getPresetEmoji(preset) {
         minify: '📦'
     };
     return emojis[preset] || '⚪';
+}
+
+function capitalizeFirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
 }
