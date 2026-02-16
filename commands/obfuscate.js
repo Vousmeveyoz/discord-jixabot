@@ -176,7 +176,6 @@ module.exports = {
             // IMPORTANT: Prometheus CLI needs relative path from its working directory
             // We're running from prometheus dir, so we need to calculate relative path
             const relativeInputPath = path.relative(PROMETHEUS_CONFIG.PROMETHEUS_PATH, inputPath);
-            const relativeOutputPath = path.relative(PROMETHEUS_CONFIG.PROMETHEUS_PATH, obfuscatedPath);
             
             console.log(`[OBFUSCATE] Input path (absolute): ${inputPath}`);
             console.log(`[OBFUSCATE] Input path (relative): ${relativeInputPath}`);
