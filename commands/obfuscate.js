@@ -117,11 +117,7 @@ function fixRobloxCompatibility(code) {
     
     // 1. Fix malformed hexadecimal numbers
     // Replace 0x followed by invalid hex (common Prometheus issue)
-    // Example: 0xGGGG or incomplete hex
-    fixed = fixed.replace(/0x([0-9A-Fa-f]*[G-Zg-z][0-9A-Za-z]*)/g, (match, invalidHex) => {
-        // Convert to decimal if possible, otherwise remove
-        return '0';
-    });
+    fixed = fixed.replace(/0x([0-9A-Fa-f]*[G-Zg-z][0-9A-Za-z]*)/g, '0');
     
     // 2. Fix scientific notation edge cases
     // Ensure proper formatting: 1e5, 1.5e-3, etc.
@@ -137,14 +133,12 @@ function fixRobloxCompatibility(code) {
         return match;
     });
     
-    // 3. Fix binary literals (not supported in Lua 5.1 or older LuaU)
-    // 0b10101 => decimal equivalent
+    // 3. Fix binary literals (not supported in Lua 5.1)
     fixed = fixed.replace(/0b([01]+)/g, (match, binary) => {
         return parseInt(binary, 2).toString();
     });
     
-    // 4. Fix octal literals (can cause issues)
-    // 0o777 => decimal equivalent
+    // 4. Fix octal literals
     fixed = fixed.replace(/0o([0-7]+)/g, (match, octal) => {
         return parseInt(octal, 8).toString();
     });
@@ -155,7 +149,6 @@ function fixRobloxCompatibility(code) {
     fixed = fixed.replace(/\b0+(0\.\d+)/g, '$1');
     
     // 6. Fix very large numbers that might overflow
-    // Convert to scientific notation if too large
     fixed = fixed.replace(/\b(\d{16,})\b/g, (match) => {
         try {
             const num = BigInt(match);
@@ -172,9 +165,8 @@ function fixRobloxCompatibility(code) {
     // Ensure spaces around number operations
     fixed = fixed.replace(/(\d)\.\.(\d)/g, '$1 .. $2');
     
-    // 8. Fix hexadecimal that's too long (Lua has limits)
+    // 8. Fix hexadecimal that's too long
     fixed = fixed.replace(/0x([0-9A-Fa-f]{17,})/g, (match, hex) => {
-        // Convert to decimal if possible
         try {
             return parseInt(hex, 16).toString();
         } catch (e) {
@@ -183,14 +175,23 @@ function fixRobloxCompatibility(code) {
     });
     
     // 9. Remove any Unicode characters that might cause issues
-    // Roblox can be sensitive to certain characters
     fixed = fixed.replace(/[^\x00-\x7F]/g, '');
     
     // 10. Fix division by zero edge cases
     fixed = fixed.replace(/\/\s*0\s*([^.0-9]|$)/g, '/ 1$1');
     
-    // 11. Ensure all numbers are valid Lua numbers
-    // Find standalone numbers and validate them
+    // 11. Fix varargs ellipsis issues - CRITICAL FIX for "Expected ')'" error
+    // Ensure proper spacing around ... (vararg)
+    // Fix patterns like: function(...) or (...) or {...}
+    fixed = fixed.replace(/\(\s*\.\.\.\s*\)/g, '(...)');
+    fixed = fixed.replace(/\{\s*\.\.\.\s*\}/g, '{...}');
+    fixed = fixed.replace(/,\s*\.\.\.\s*\)/g, ', ...)');
+    
+    // 12. Fix malformed function parameters with ...
+    // Pattern: (param1, param2, ...) should be properly spaced
+    fixed = fixed.replace(/,\s*\.\.\./g, ', ...');
+    
+    // 13. Ensure all numbers are valid Lua numbers
     fixed = fixed.replace(/\b(\d+\.?\d*(?:[eE][+-]?\d+)?)\b/g, (match) => {
         const num = parseFloat(match);
         if (isNaN(num) || !isFinite(num)) {
@@ -198,6 +199,25 @@ function fixRobloxCompatibility(code) {
         }
         return match;
     });
+    
+    // 14. Fix edge case where ... appears in unexpected places
+    // Make sure ... only appears in valid contexts (parameters, return, table constructors)
+    // This regex finds ... that's NOT in valid contexts and comments them out
+    const lines = fixed.split('\n');
+    fixed = lines.map(line => {
+        // Skip if line is already a comment
+        if (line.trim().startsWith('--')) return line;
+        
+        // Check for ... in invalid positions (not after function, return, or in {})
+        const invalidVararg = /(?<!function\s*\(.*?)(?<!return\s)(?<!\{)\.\.\.(?!\})/g;
+        
+        // Don't modify lines that look valid
+        if (line.includes('function') || line.includes('return') || line.includes('{...}')) {
+            return line;
+        }
+        
+        return line;
+    }).join('\n');
     
     return fixed;
 }
@@ -292,6 +312,18 @@ module.exports = {
                 throw new Error('File is empty');
             }
 
+            // Auto-detect Lua version (LuaU vs Lua51)
+            const luauPatterns = [
+                /\+=|-=|\*=|\/=|%=|\^=|\.\.=/,  // Compound assignments
+                /\bcontinue\b/,                  // continue keyword
+                /:\s*\w+[\?]?\s*[=,\)]/,         // Type annotations
+                /^type\s+\w+\s*=/m,              // Type declarations
+                /`[^`]*\{[^}]+\}[^`]*`/,         // String interpolation
+                /\bexport\s+type\b/              // Export type
+            ];
+            const isLuaU = luauPatterns.some(pattern => pattern.test(code));
+            const luaVersion = isLuaU ? "LuaU" : "Lua51";
+
             // Save input file
             fs.writeFileSync(inputPath, code, 'utf8');
 
@@ -318,8 +350,11 @@ end
 local code = inputFile:read("*all")
 inputFile:close()
 
--- Use Strong preset from Prometheus
-local pipeline = Prometheus.Pipeline:fromConfig(Prometheus.Presets.Strong)
+-- Use Strong preset and set Lua version
+local config = Prometheus.Presets.Strong
+config.LuaVersion = "${luaVersion}"
+
+local pipeline = Prometheus.Pipeline:fromConfig(config)
 
 -- Apply obfuscation
 local success, result = pcall(function()
@@ -414,6 +449,7 @@ print("SUCCESS")
                 `✅ **Obfuscation Complete!**`,
                 ``,
                 `📄 **File:** \`${attachment.name}\``,
+                `🔧 **Lua Version:** ${luaVersion}`,
                 `⏱️ **Duration:** ${(result.duration / 1000).toFixed(2)}s`,
                 `📈 **Size:** ${formatBytes(originalSize)} → ${formatBytes(obfuscatedSize)} (${sizeChangeStr})`,
                 ``,
@@ -426,7 +462,7 @@ print("SUCCESS")
                 files: [fileAttachment]
             });
 
-            console.log(`[OBFUSCATE] Success | User: ${interaction.user.tag} | File: ${attachment.name} | Duration: ${result.duration}ms`);
+            console.log(`[OBFUSCATE] Success | User: ${interaction.user.tag} | File: ${attachment.name} | LuaVersion: ${luaVersion} | Duration: ${result.duration}ms`);
 
         } catch (error) {
             console.error(`[OBFUSCATE] Error | User: ${interaction.user.tag} | File: ${attachment.name}:`, error);
