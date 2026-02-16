@@ -22,34 +22,76 @@ if (!fs.existsSync(PROMETHEUS_CONFIG.TEMP_DIR)) {
     fs.mkdirSync(PROMETHEUS_CONFIG.TEMP_DIR, { recursive: true });
 }
 
+// Log configuration on startup
+console.log('[OBFUSCATE] Configuration:');
+console.log('[OBFUSCATE]   LUA_PATH:', PROMETHEUS_CONFIG.LUA_PATH);
+console.log('[OBFUSCATE]   PROMETHEUS_PATH:', PROMETHEUS_CONFIG.PROMETHEUS_PATH);
+console.log('[OBFUSCATE]   TEMP_DIR:', PROMETHEUS_CONFIG.TEMP_DIR);
+
+// Verify cli.lua exists on startup
+const cliPath = path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, 'cli.lua');
+if (fs.existsSync(cliPath)) {
+    console.log('[OBFUSCATE]   cli.lua: ✓ Found at', cliPath);
+} else {
+    console.error('[OBFUSCATE]   cli.lua: ✗ NOT FOUND at', cliPath);
+    console.error('[OBFUSCATE]   Bot will not be able to obfuscate files!');
+}
+
 // Verify Prometheus CLI exists
 function verifyPrometheusInstallation() {
+    console.log('[OBFUSCATE] Verifying Prometheus installation...');
+    console.log('[OBFUSCATE] PROMETHEUS_PATH:', PROMETHEUS_CONFIG.PROMETHEUS_PATH);
+    
     // Try direct path first
     let cliPath = path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, 'cli.lua');
+    console.log('[OBFUSCATE] Checking for cli.lua at:', cliPath);
     
-    // If not found, try parent directory (in case path points to src folder)
-    if (!fs.existsSync(cliPath)) {
-        const parentPath = path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, '..');
-        cliPath = path.join(parentPath, 'cli.lua');
-        
-        if (fs.existsSync(cliPath)) {
-            // Update config to use parent path
-            PROMETHEUS_CONFIG.PROMETHEUS_PATH = path.resolve(parentPath);
-            console.log('[OBFUSCATE] Found cli.lua in parent directory:', PROMETHEUS_CONFIG.PROMETHEUS_PATH);
-            return true;
-        }
+    if (fs.existsSync(cliPath)) {
+        console.log('[OBFUSCATE] ✓ cli.lua found!');
+        return true;
     }
     
-    if (!fs.existsSync(cliPath)) {
-        console.error('[OBFUSCATE] ERROR: Prometheus cli.lua not found at:', cliPath);
-        console.error('[OBFUSCATE] Please ensure PROMETHEUS_PATH points to the directory containing cli.lua');
-        console.error('[OBFUSCATE] Current PROMETHEUS_PATH:', PROMETHEUS_CONFIG.PROMETHEUS_PATH);
-        console.error('[OBFUSCATE] Expected cli.lua at:', path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, 'cli.lua'));
-        return false;
+    // Try src subfolder (in case user has different structure)
+    const srcPath = path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, 'src', 'cli.lua');
+    console.log('[OBFUSCATE] Checking for cli.lua at:', srcPath);
+    
+    if (fs.existsSync(srcPath)) {
+        console.log('[OBFUSCATE] ✓ cli.lua found in src folder!');
+        return true;
     }
     
-    console.log('[OBFUSCATE] Prometheus CLI found at:', cliPath);
-    return true;
+    // Try parent directory (in case path accidentally points to src)
+    const parentPath = path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, '..');
+    const parentCliPath = path.join(parentPath, 'cli.lua');
+    console.log('[OBFUSCATE] Checking for cli.lua at:', parentCliPath);
+    
+    if (fs.existsSync(parentCliPath)) {
+        console.log('[OBFUSCATE] ✓ cli.lua found in parent directory!');
+        // Update config to use correct path
+        PROMETHEUS_CONFIG.PROMETHEUS_PATH = path.resolve(parentPath);
+        console.log('[OBFUSCATE] Updated PROMETHEUS_PATH to:', PROMETHEUS_CONFIG.PROMETHEUS_PATH);
+        return true;
+    }
+    
+    console.error('[OBFUSCATE] ✗ cli.lua NOT FOUND in any expected location');
+    console.error('[OBFUSCATE] Searched:');
+    console.error('[OBFUSCATE]   -', cliPath);
+    console.error('[OBFUSCATE]   -', srcPath);
+    console.error('[OBFUSCATE]   -', parentCliPath);
+    console.error('[OBFUSCATE] Please verify:');
+    console.error('[OBFUSCATE]   1. Prometheus is downloaded/cloned');
+    console.error('[OBFUSCATE]   2. PROMETHEUS_PATH in .env points to prometheus folder');
+    console.error('[OBFUSCATE]   3. cli.lua file exists in that folder');
+    
+    // List directory contents for debugging
+    try {
+        const dirContents = fs.readdirSync(PROMETHEUS_CONFIG.PROMETHEUS_PATH);
+        console.error('[OBFUSCATE] Contents of PROMETHEUS_PATH:', dirContents.join(', '));
+    } catch (e) {
+        console.error('[OBFUSCATE] Could not read directory:', e.message);
+    }
+    
+    return false;
 }
 
 /**
@@ -79,29 +121,6 @@ module.exports = {
     async execute(interaction) {
         const attachment = interaction.options.getAttachment('file');
         const customOutputName = interaction.options.getString('output_name');
-
-        // Verify Prometheus installation first
-        if (!verifyPrometheusInstallation()) {
-            return interaction.reply({
-                content: [
-                    '❌ **Prometheus Not Configured**',
-                    '',
-                    'The Prometheus obfuscator is not properly installed or configured.',
-                    '',
-                    '**Setup Instructions:**',
-                    '1. Download Prometheus from GitHub',
-                    '2. Extract to a folder (e.g., `/path/to/prometheus`)',
-                    '3. Set environment variable:',
-                    '   `PROMETHEUS_PATH=/path/to/prometheus`',
-                    '',
-                    `**Current Path:** \`${PROMETHEUS_CONFIG.PROMETHEUS_PATH}\``,
-                    `**Looking for:** \`cli.lua\``,
-                    '',
-                    '*Contact your administrator for help.*'
-                ].join('\n'),
-                flags: MessageFlags.Ephemeral
-            });
-        }
 
         // Validate file extension
         if (!attachment.name.endsWith('.lua')) {
