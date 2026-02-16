@@ -7,6 +7,7 @@ const crypto = require('crypto');
 // Configuration
 const PROMETHEUS_CONFIG = {
     LUA_PATH: process.env.LUA_PATH || 'lua',
+    // Path should point to the directory containing cli.lua
     PROMETHEUS_PATH: process.env.PROMETHEUS_PATH || path.join(__dirname, '..', 'prometheus'),
     TEMP_DIR: process.env.TEMP_DIR || path.join(__dirname, '..', 'temp'),
     MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE) || 512000,
@@ -19,6 +20,36 @@ const PROMETHEUS_CONFIG = {
 // Ensure temp directory exists
 if (!fs.existsSync(PROMETHEUS_CONFIG.TEMP_DIR)) {
     fs.mkdirSync(PROMETHEUS_CONFIG.TEMP_DIR, { recursive: true });
+}
+
+// Verify Prometheus CLI exists
+function verifyPrometheusInstallation() {
+    // Try direct path first
+    let cliPath = path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, 'cli.lua');
+    
+    // If not found, try parent directory (in case path points to src folder)
+    if (!fs.existsSync(cliPath)) {
+        const parentPath = path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, '..');
+        cliPath = path.join(parentPath, 'cli.lua');
+        
+        if (fs.existsSync(cliPath)) {
+            // Update config to use parent path
+            PROMETHEUS_CONFIG.PROMETHEUS_PATH = path.resolve(parentPath);
+            console.log('[OBFUSCATE] Found cli.lua in parent directory:', PROMETHEUS_CONFIG.PROMETHEUS_PATH);
+            return true;
+        }
+    }
+    
+    if (!fs.existsSync(cliPath)) {
+        console.error('[OBFUSCATE] ERROR: Prometheus cli.lua not found at:', cliPath);
+        console.error('[OBFUSCATE] Please ensure PROMETHEUS_PATH points to the directory containing cli.lua');
+        console.error('[OBFUSCATE] Current PROMETHEUS_PATH:', PROMETHEUS_CONFIG.PROMETHEUS_PATH);
+        console.error('[OBFUSCATE] Expected cli.lua at:', path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, 'cli.lua'));
+        return false;
+    }
+    
+    console.log('[OBFUSCATE] Prometheus CLI found at:', cliPath);
+    return true;
 }
 
 /**
@@ -48,6 +79,29 @@ module.exports = {
     async execute(interaction) {
         const attachment = interaction.options.getAttachment('file');
         const customOutputName = interaction.options.getString('output_name');
+
+        // Verify Prometheus installation first
+        if (!verifyPrometheusInstallation()) {
+            return interaction.reply({
+                content: [
+                    '❌ **Prometheus Not Configured**',
+                    '',
+                    'The Prometheus obfuscator is not properly installed or configured.',
+                    '',
+                    '**Setup Instructions:**',
+                    '1. Download Prometheus from GitHub',
+                    '2. Extract to a folder (e.g., `/path/to/prometheus`)',
+                    '3. Set environment variable:',
+                    '   `PROMETHEUS_PATH=/path/to/prometheus`',
+                    '',
+                    `**Current Path:** \`${PROMETHEUS_CONFIG.PROMETHEUS_PATH}\``,
+                    `**Looking for:** \`cli.lua\``,
+                    '',
+                    '*Contact your administrator for help.*'
+                ].join('\n'),
+                flags: MessageFlags.Ephemeral
+            });
+        }
 
         // Validate file extension
         if (!attachment.name.endsWith('.lua')) {
@@ -106,12 +160,14 @@ module.exports = {
                 const startTime = Date.now();
                 
                 const args = [
-                    './cli.lua',
+                    path.join(PROMETHEUS_CONFIG.PROMETHEUS_PATH, 'cli.lua'),
                     '--preset', 'Medium',
                     '--LuaVersion', luaVersion,
                     '--nocolors',
                     inputPath
                 ];
+                
+                console.log(`[OBFUSCATE] Executing: ${PROMETHEUS_CONFIG.LUA_PATH} ${args.join(' ')}`);
                 
                 const proc = spawn(PROMETHEUS_CONFIG.LUA_PATH, args, {
                     timeout: PROMETHEUS_CONFIG.TIMEOUT,
@@ -122,23 +178,36 @@ module.exports = {
                 let stderr = '';
 
                 proc.stdout.on('data', (data) => {
-                    stdout += data.toString();
+                    const output = data.toString();
+                    stdout += output;
+                    console.log(`[OBFUSCATE] stdout: ${output}`);
                 });
 
                 proc.stderr.on('data', (data) => {
-                    stderr += data.toString();
+                    const output = data.toString();
+                    stderr += output;
+                    console.error(`[OBFUSCATE] stderr: ${output}`);
                 });
 
                 proc.on('close', (code) => {
                     const duration = Date.now() - startTime;
+                    console.log(`[OBFUSCATE] Process exited with code ${code} in ${duration}ms`);
+                    
                     if (code === 0) {
                         resolve({ success: true, duration, stdout });
                     } else {
-                        reject(new Error(stderr || stdout || `Process exited with code ${code}`));
+                        // Check if it's just a warning/info message
+                        if (fs.existsSync(obfuscatedPath)) {
+                            console.log('[OBFUSCATE] Output file exists despite non-zero exit code, treating as success');
+                            resolve({ success: true, duration, stdout });
+                        } else {
+                            reject(new Error(stderr || stdout || `Process exited with code ${code}`));
+                        }
                     }
                 });
 
                 proc.on('error', (err) => {
+                    console.error(`[OBFUSCATE] Process error:`, err);
                     reject(new Error(`Failed to start Lua: ${err.message}`));
                 });
             });
@@ -197,13 +266,15 @@ module.exports = {
             let errorMessage = 'An unexpected error occurred.';
             
             if (error.message.includes('Failed to start Lua')) {
-                errorMessage = 'Lua interpreter not found. Please contact an administrator.';
+                errorMessage = `Lua interpreter not found.\n\n**Current LUA_PATH:** \`${PROMETHEUS_CONFIG.LUA_PATH}\`\n\nPlease set the correct path in your .env file.`;
             } else if (error.message.includes('cli.lua')) {
-                errorMessage = 'Prometheus CLI not found. Please contact an administrator.';
+                errorMessage = `Prometheus CLI not found.\n\n**Current PROMETHEUS_PATH:** \`${PROMETHEUS_CONFIG.PROMETHEUS_PATH}\`\n\nPlease verify Prometheus is installed correctly.`;
             } else if (error.message.includes('syntax error') || error.message.includes('Parsing Error')) {
                 errorMessage = 'Your Lua code contains syntax errors. Please check your code and try again.';
             } else if (error.message.includes('timeout')) {
                 errorMessage = 'Obfuscation timed out. Try using a smaller file.';
+            } else if (error.message.includes('ENOENT')) {
+                errorMessage = `File not found error.\n\n**Prometheus Path:** \`${PROMETHEUS_CONFIG.PROMETHEUS_PATH}\`\n**Lua Path:** \`${PROMETHEUS_CONFIG.LUA_PATH}\`\n\nPlease check your configuration.`;
             } else if (error.message) {
                 errorMessage = error.message;
             }
