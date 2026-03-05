@@ -38,7 +38,8 @@ if (BAGIBAGI_CONFIG.ENABLED && !WEBHOOK_CONFIG.MASTER_KEY) {
 function readLicenses() {
     try {
         const data = fs.readFileSync(LICENSES_FILE, "utf8");
-        return JSON.parse(data);
+        const cleaned = data.replace(/,\s*([\]}])/g, '$1');
+        return JSON.parse(cleaned);
     } catch (err) {
         if (err.code === "ENOENT") return { licenses: [] };
         throw err;
