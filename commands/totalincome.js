@@ -6,7 +6,9 @@ const path = require('path');
 
 // ─── CONFIG ───────────────────────────────────────────────────────────
 const TARGET_CHANNEL_ID = '1412737876747092008';
-const CONCURRENCY_LIMIT = 5;          // max parallel OCR workers
+const CONCURRENCY_LIMIT = 3;          // turunkan dari 5 ke 3 supaya tidak terlalu berat
+const OCR_TIMEOUT_MS = 30000;         // timeout 30 detik per image
+const DOWNLOAD_TIMEOUT_MS = 30000;    // timeout 30 detik per download
 const TEMP_DIR = path.join(__dirname, '..', 'temp_ocr');
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
 
@@ -43,44 +45,41 @@ async function fetchAllMessages(channel, statusCallback) {
 }
 
 /**
- * Download an image attachment to a temp file, return its path.
+ * Download an image attachment to a temp file with timeout.
  */
 async function downloadImage(url, filename) {
     if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
     const filePath = path.join(TEMP_DIR, filename);
-    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
+    const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        timeout: DOWNLOAD_TIMEOUT_MS
+    });
     fs.writeFileSync(filePath, response.data);
     return filePath;
 }
 
 /**
- * Run Tesseract OCR on an image file and return the extracted text.
+ * Run Tesseract OCR on an image file with timeout protection.
  */
 async function ocrImage(filePath) {
-    const { data: { text } } = await Tesseract.recognize(filePath, 'ind+eng', {
-        // logger: m => {} // silence progress logs
-    });
-    return text;
+    const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`OCR timeout after ${OCR_TIMEOUT_MS / 1000}s`)), OCR_TIMEOUT_MS)
+    );
+
+    const ocr = Tesseract.recognize(filePath, 'ind+eng').then(({ data: { text } }) => text);
+
+    return Promise.race([ocr, timeout]);
 }
 
 /**
  * Extract the most likely payment nominal from OCR text.
- *
- * Supports formats:
- *   Rp 25.000   |   Rp25,000   |   25000   |   25.000   |   IDR 100.000
- *
- * Strategy: find all number-like tokens, pick the one that looks most
- * like a Rupiah transfer amount (prefer numbers preceded by Rp/IDR,
- * then the largest reasonable number).
  */
 function extractNominal(text) {
     if (!text || text.trim().length === 0) return null;
 
-    // Normalise whitespace
     const cleaned = text.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ');
 
-    // Pattern 1: explicit Rp / IDR prefix  →  Rp 25.000  |  IDR 1,500,000
     const rpPattern = /(?:Rp\.?|IDR)\s*([\d.,]+)/gi;
     let match;
     const candidates = [];
@@ -90,8 +89,6 @@ function extractNominal(text) {
         if (num && num >= 1000) candidates.push({ value: num, priority: 2 });
     }
 
-    // Pattern 2: standalone numbers ≥ 1000 that look like currency
-    //   e.g.  25.000  |  100,000  |  1500000
     const numPattern = /(?<!\d)([\d]{1,3}(?:[.,]\d{3})+|[\d]{4,})(?!\d)/g;
     while ((match = numPattern.exec(cleaned)) !== null) {
         const num = parseNominal(match[1]);
@@ -100,7 +97,6 @@ function extractNominal(text) {
 
     if (candidates.length === 0) return null;
 
-    // Prefer Rp-prefixed numbers; among same priority pick the largest
     candidates.sort((a, b) => b.priority - a.priority || b.value - a.value);
     return candidates[0].value;
 }
@@ -113,15 +109,12 @@ function parseNominal(str) {
 
     let cleaned = str.trim();
 
-    // Detect thousands-separator style
-    // If there's a dot followed by exactly 3 digits at the end → dot is thousands sep
     if (/\.\d{3}$/.test(cleaned) && !/,\d{3}/.test(cleaned)) {
-        cleaned = cleaned.replace(/\./g, '');          // 25.000 → 25000
+        cleaned = cleaned.replace(/\./g, '');
     } else if (/,\d{3}$/.test(cleaned)) {
-        cleaned = cleaned.replace(/,/g, '');            // 25,000 → 25000
-        cleaned = cleaned.replace(/\./g, '');           // just in case
+        cleaned = cleaned.replace(/,/g, '');
+        cleaned = cleaned.replace(/\./g, '');
     } else {
-        // Remove any remaining separators
         cleaned = cleaned.replace(/[.,]/g, '');
     }
 
@@ -206,7 +199,6 @@ module.exports = {
             });
         }
 
-        // Check permissions
         const perms = targetChannel.permissionsFor(interaction.guild.members.me);
         if (!perms || !perms.has('ViewChannel') || !perms.has('ReadMessageHistory')) {
             return interaction.editReply({
@@ -261,7 +253,6 @@ module.exports = {
                     const nominal = extractNominal(text);
 
                     processed++;
-                    // Progress update every 10 images
                     if (processed % 10 === 0) {
                         try {
                             await interaction.editReply(
@@ -280,7 +271,19 @@ module.exports = {
                     };
                 } catch (err) {
                     ocrErrors++;
+                    processed++;
                     console.error(`[TOTALINCOME] OCR failed for ${item.filename}:`, err.message);
+
+                    // Update progress juga saat error supaya tidak stuck
+                    if (processed % 10 === 0) {
+                        try {
+                            await interaction.editReply(
+                                `🔍 OCR Progress: **${processed}/${imageItems.length}** ` +
+                                `(errors: ${ocrErrors})`
+                            );
+                        } catch (_) {}
+                    }
+
                     return {
                         messageId: item.messageId,
                         timestamp: item.timestamp,
@@ -290,7 +293,6 @@ module.exports = {
                         error: err.message
                     };
                 } finally {
-                    // Cleanup temp file
                     if (filePath && fs.existsSync(filePath)) {
                         try { fs.unlinkSync(filePath); } catch (_) {}
                     }
@@ -324,7 +326,6 @@ module.exports = {
                 monthlyTotals[monthKey] += r.nominal;
             }
 
-            // Sort months chronologically
             const sortedMonths = Object.entries(monthlyTotals).sort((a, b) => {
                 const monthOrder = [
                     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
